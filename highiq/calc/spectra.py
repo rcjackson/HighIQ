@@ -88,6 +88,31 @@ def welchs_method(complex_coeff, fs=50e6, nfft=32, window_skip=16, num_per_block
 
 def get_psd(spectra, gate_resolution=30, wavelength=1.548e-6, fs=50e6, nfft=32,
             acf_name='acf', acf_bkg_name='acf_bkg'):
+    """
+    This function will get the power spectral density from the autocorrelation function.
+
+    Parameters
+    ----------
+    spectra: ACT Dataset
+        The dataset containing the autocorrelation function.
+    gate_resolution: float
+        The gate resolution to derive the spectra for.
+    wavelength: float
+        The wavelength (in m) of the radar.
+    fs: float
+        The pulse repetition frequency of the radar
+    nfft: int
+        The number of points to include in the FFT.
+    acf_name: str
+        The name of the autocorrelation function field.
+    acf_bkg_name: str
+        The name of the autocorrelation function of the background.
+
+    Returns
+    -------
+    spectra: ACT Dataset
+        The dataset containing the power spectral density functions.
+    """
     num_gates = int(gate_resolution / 3)
     complex_coeff = spectra[acf_name].sel(complex=1).values +\
                     spectra[acf_name].sel(complex=2).values * 1j
@@ -117,8 +142,8 @@ def get_psd(spectra, gate_resolution=30, wavelength=1.548e-6, fs=50e6, nfft=32,
     spectra['power'] = xr.DataArray(
         power[:, :, inds_sorted], dims=(('time', 'range', 'vel_bins')))
 
-    complex_coeff = (spectra['acf_bkg'].sel(complex=1).values +
-                     spectra['acf_bkg'].sel(complex=2).values * 1j)
+    complex_coeff = (spectra[acf_bkg_name].sel(complex=1).values +
+                     spectra[acf_bkg_name].sel(complex=2).values * 1j)
     complex_coeff = np.reshape(complex_coeff,
         (int(complex_coeff.shape[0] / num_gates),
          int(complex_coeff.shape[1] * num_gates)))
@@ -150,6 +175,7 @@ def get_psd(spectra, gate_resolution=30, wavelength=1.548e-6, fs=50e6, nfft=32,
     spectra['power_spectra_normed_interp'] = xr.DataArray(
         my_array, dims=('time', 'range', 'vel_bin_interp'),)
     return spectra
+
 
 def calc_num_peaks(my_spectra):
     spectra = my_spectra['power_spectra_normed_interp']
