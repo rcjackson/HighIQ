@@ -86,32 +86,42 @@ def welchs_method(complex_coeff, fs=50e6, nfft=32, window_skip=16, num_per_block
     return freq, np.array(power)
 
 
-def get_psd(spectra, gate_resolution=30):
-    wavelength = 1.548e-6
+def get_psd(spectra, gate_resolution=30, wavelength=1.548e-6, fs=50e6, nfft=32,
+            acf_name='acf', acf_bkg_name='acf_bkg'):
     num_gates = int(gate_resolution / 3)
-    complex_coeff = spectra['acf'].sel(complex=1).values + spectra['acf'].sel(complex=2).values * 1j
-    complex_coeff = np.reshape(complex_coeff,
-                               (complex_coeff.shape[0],
-                                int(complex_coeff.shape[1] / num_gates),
-                                int(complex_coeff.shape[2] * num_gates)))
-    num_time_bins = complex_coeff.shape[0]
-    num_freq_bins = complex_coeff.shape[2] * num_gates
-    freq, power = welchs_method(complex_coeff, fs=50e6, nfft=32)
-    spectra['range'] = xr.DataArray(gate_resolution * np.arange(int(complex_coeff.shape[1])),
-                                    dims=('range'))
+    complex_coeff = spectra[acf_name].sel(complex=1).values +\
+                    spectra[acf_name].sel(complex=2).values * 1j
+    complex_coeff = np.reshape(
+        complex_coeff, (complex_coeff.shape[0],
+                        int(complex_coeff.shape[1] / num_gates),
+                        int(complex_coeff.shape[2] * num_gates)))
+    freq, power = welchs_method(complex_coeff, fs=fs, nfft=nfft)
+    spectra['range'] = xr.DataArray(
+        gate_resolution * np.arange(int(complex_coeff.shape[1])),
+        dims=('range'))
+    spectra['range'].attrs['long_name'] = "Range"
+    spectra['range'].attrs['units'] = "m"
     spectra.attrs['nyquist_velocity'] = 1548e-9 / (4 * 1 / 50e6)
+    spectra.attrs['nyquist_velocity_units'] = "m s-1"
+
     spectra['freq_bins'] = xr.DataArray(freq, dims=['freq'])
+    spectra['freq_bins'].long_name = "Doppler spectra bins in frequency units"
+    spectra['freq_bins'].units = "s-1"
     vel_bins = spectra['freq_bins'] * (wavelength / 2)
     inds_sorted = np.argsort(vel_bins.values)
     vel_bins = vel_bins[inds_sorted]
     spectra['vel_bins'] = xr.DataArray(vel_bins, dims=('vel_bins'))
+    spectra['vel_bins'].attrs['long_name'] = "Doppler spectra velocity bins"
+    spectra['vel_bins'].units = "m s-1"
     spectra['freq_bins'] = spectra['freq_bins'][inds_sorted]
-    spectra['power'] = xr.DataArray(power[:, :, inds_sorted], dims=(('time', 'range', 'vel_bins')), )
+    spectra['power'] = xr.DataArray(
+        power[:, :, inds_sorted], dims=(('time', 'range', 'vel_bins')))
 
     complex_coeff = (spectra['acf_bkg'].sel(complex=1).values +
                      spectra['acf_bkg'].sel(complex=2).values * 1j)
     complex_coeff = np.reshape(complex_coeff,
-        (int(complex_coeff.shape[0] / num_gates), int(complex_coeff.shape[1] * num_gates)))
+        (int(complex_coeff.shape[0] / num_gates),
+         int(complex_coeff.shape[1] * num_gates)))
     freq, power = welchs_method(complex_coeff, fs=50e6, nfft=32)
     spectra['power_bkg'] = xr.DataArray(power[:, inds_sorted], dims=(('range', 'vel_bins')))
 
@@ -121,22 +131,22 @@ def get_psd(spectra, gate_resolution=30):
         spectra['power_spectral_density'] > 0, 0)
     tot_power = np.sum(spectra['power_spectral_density'].values, axis=2)
     dV = np.diff(spectra['vel_bins'])
-    power_tiled = np.stack([tot_power for x in range(spectra['power'].values.shape[2])], axis=2)
+    power_tiled = np.stack(
+        [tot_power for x in range(spectra['power'].values.shape[2])], axis=2)
     spectra['power_spectra_normed'] = spectra['power_spectral_density'] / power_tiled / dV[1] * 100
     spectra['power_spectral_density'] = 10 * np.log10(spectra['power_spectral_density']) / dV[1]
     spectra['power_spectral_density'].attrs["units"] = 's dB-1 m-1 '
 
     # Smooth out power spectra
-    num_points = 8
     interpolated_bins = np.linspace(
         spectra['vel_bins'].values[0], spectra['vel_bins'].values[-1], 256)
     spectra['vel_bin_interp'] = xr.DataArray(interpolated_bins, dims=('vel_bin_interp'))
-    my_array = gpu_moving_average(
-        fast_expand(spectra['power_spectral_density'].values, 8))
+    my_array = _gpu_moving_average(
+        _fast_expand(spectra['power_spectral_density'].values, 8))
     spectra['power_spectral_density_interp'] = xr.DataArray(
         my_array, dims=('time', 'range', 'vel_bin_interp'))
-    my_array = gpu_moving_average(
-        fast_expand(spectra['power_spectra_normed'].values, 8))
+    my_array = _gpu_moving_average(
+        _fast_expand(spectra['power_spectra_normed'].values, 8))
     spectra['power_spectra_normed_interp'] = xr.DataArray(
         my_array, dims=('time', 'range', 'vel_bin_interp'),)
     return spectra

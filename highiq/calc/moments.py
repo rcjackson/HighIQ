@@ -3,7 +3,7 @@ import cupy as cp
 import xarray as xr
 
 
-def gpu_calc_power(psd, dV, block_size=200, normed=True):
+def _gpu_calc_power(psd, dV, block_size=200, normed=True):
     shp = psd.shape
     times = shp[0]
     power = np.zeros((shp[0], shp[1]))
@@ -24,12 +24,12 @@ def gpu_calc_power(psd, dV, block_size=200, normed=True):
 
     return power
 
-def gpu_calc_velocity(psd, power, vel_bins, dV, block_size=100):
+
+def _gpu_calc_velocity(psd, power, vel_bins, dV, block_size=100):
     shp = psd.shape
     times = shp[0]
     velocity = np.zeros((shp[0], shp[1]))
-    print(psd.max())
-    print(power.max())
+
     for k in range(0, times, block_size):
         the_max = min([k + block_size, times])
         gpu_array = cp.array(psd[k:the_max, :, :], dtype=float64)
@@ -40,11 +40,11 @@ def gpu_calc_velocity(psd, power, vel_bins, dV, block_size=100):
         velocity[k:the_max, :] = gpu_array.get()
     return velocity
 
-def gpu_calc_velocity_dumb(psd, vel_bins, block_size=500):
+
+def _gpu_calc_velocity_dumb(psd, vel_bins, block_size=500):
     shp = psd.shape
     times = shp[0]
     velocity = np.zeros((shp[0], shp[1]))
-    # Get dV and vel_min
     dV = np.diff(vel_bins)[0]
     vel_min = vel_bins.min()
     for k in range(0, times, block_size):
@@ -55,7 +55,8 @@ def gpu_calc_velocity_dumb(psd, vel_bins, block_size=500):
         velocity[k:the_max, :] = gpu_array.get()
     return velocity
 
-def gpu_calc_spectral_width(psd, power, vel_bins, velocity, dV, block_size=100):
+
+def _gpu_calc_spectral_width(psd, power, vel_bins, velocity, dV, block_size=100):
     shp = psd.shape
     times = shp[0]
     specwidth = np.zeros((shp[0], shp[1]))
@@ -71,14 +72,146 @@ def gpu_calc_spectral_width(psd, power, vel_bins, velocity, dV, block_size=100):
         specwidth[k:the_max, :] = gpu_array.get()
     return specwidth
 
-def gpu_snr(power, noise, block_size=500):
+
+def _gpu_snr(power, noise):
     shp = psd.shape
     times = shp[0]
-    snr = np.zeros_like(power)
-    #or k in range(0, times, block_size):
-    #   the_max = min([k+block_size, times])
     gpu_power = cp.array(power)
     gpu_noise = cp.tile(cp.array(noise), (times, 1))
     gpu_power = 10*cp.log10(gpu_power/gpu_noise)
     snr = gpu_power.get()
     return snr
+
+
+def _gpu_calc_skewness(psd, power, vel_bins, velocity, spec_width, dV, block_size=100):
+    shp = psd.shape
+    times = shp[0]
+    skewness = np.zeros((shp[0], shp[1]))
+    for k in range(0, times, block_size):
+        the_max = min([k+block_size, times])
+        gpu_array = cp.array(psd[k:the_max, :, :], dtype=float64)
+        power_array = cp.array(power[k:the_max, :], dtype=float64)
+        spec_width_array = cp.array(spec_width[k:the_max, :], dtype=float64)
+        power_array *= spec_width_array**3
+        velocity_array = cp.array(velocity[k:the_max, :])
+        velocity_array = cp.transpose(cp.tile(velocity_array, (shp[2], 1, 1)), [1, 2, 0])
+        vel_bins_tiled = cp.tile(vel_bins, (the_max-k, shp[1], 1))
+        gpu_array = 10**(gpu_array/10.*dV)
+        gpu_array = 1/power_array*cp.sum((vel_bins_tiled - velocity_array)**3 * gpu_array, axis=2)
+        skewness[k:the_max, :] = gpu_array.get()
+    return skewness
+
+
+def _gpu_calc_kurtosis(psd, power, vel_bins, velocity, spec_width, dV, block_size=100):
+    shp = psd.shape
+    times = shp[0]
+    kurtosis = np.zeros((shp[0], shp[1]))
+    for k in range(0, times, block_size):
+        the_max = min([k+block_size, times])
+        gpu_array = cp.array(psd[k:the_max, :, :], dtype=float64)
+        power_array = cp.array(power[k:the_max, :], dtype=float64)
+        spec_width_array = cp.array(spec_width[k:the_max, :], dtype=float64)
+        power_array *= spec_width_array**4
+        velocity_array = cp.array(velocity[k:the_max, :])
+        velocity_array = cp.transpose(cp.tile(velocity_array, (shp[2], 1, 1)), [1, 2, 0])
+        vel_bins_tiled = cp.tile(vel_bins, (the_max-k, shp[1], 1))
+        gpu_array = 10**(gpu_array/10.*dV)
+        gpu_array = 1/power_array*cp.sum((vel_bins_tiled - velocity_array)**4 * gpu_array, axis=2)
+        kurtosis[k:the_max, :] = gpu_array.get()
+    return kurtosis
+
+
+def get_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments=None):
+    if which_moments is None:
+        which_moments = ['snr', 'attenuated_backscatter', 'doppler_velocity', 'spectral_width',
+                         'skewness', 'kurtosis']
+    else:
+        which_moments = [x.lower() for x in which_moments]
+
+    dV = np.diff(spectra['vel_bins'])[0]
+    linear_psd = spectra['power_spectral_density_interp']
+    linear_psd_0filled = linear_psd.fillna(0)
+    power = _gpu_calc_power(
+        linear_psd_0filled, dV, block_size=round(200*block_size_ratio))
+    if ('doppler_velocity' in which_moments or 'spectral_wifth' in which_moments or
+        'skewness' in which_moments or 'kurtosis' in which_moments):
+        velocity = _gpu_calc_velocity(
+            linear_psd_0filled, power,
+            spectra['vel_bin_interp'].values, dV, block_size=round(100*block_size_ratio))
+
+    if 'doppler_velocity' in which_moments:
+        velocity_dumb = _gpu_calc_velocity_dumb(
+            linear_psd_0filled, spectra['vel_bin_interp'].values,
+            block_size=round(500*block_size_ratio))
+        spectra['doppler_velocity_max_peak'] = xr.DataArray(
+            velocity_dumb, dims=('time', 'range'))
+        spectra['doppler_velocity_max_peak'].attrs['long_name'] = \
+            "Doppler velocity derived using location of highest " \
+            "peak in spectra."
+        spectra['doppler_velocity_max_peak'].units = "m s-1"
+        spectra['doppler_velocity_max_peak'] = \
+            spectra['doppler_velocity_max_peak'].where(spectra.snr > snr_thresh)
+        spectra['doppler_velocity'] = xr.DataArray(
+            velocity, dims=('time', 'range'))
+        spectra['doppler_velocity'].attrs['long_name'] = \
+            "Doppler velocity using first moment"
+        spectra['doppler_velocity'].attrs['units'] = "m s-1"
+        spectra['doppler_velocity'] = spectra['mean_velocity'].where(
+            spectra.snr > snr_thresh)
+
+    spectra['noise'] = spectra['power_bkg'].sum(axis=1)
+    if 'snr' in which_moments:
+        power_with_noise = _gpu_calc_power(
+            spectra['power'].values, dV,
+            normed=False, block_size=round(200 * block_size_ratio))
+        power_with_noise = xr.DataArray(power_with_noise, dims=('time', 'range'))
+        spectra['snr'] = xr.DataArray(
+            gpu_snr(power_with_noise, my_spectra['noise'].values),
+            dims=('time', 'range'))
+        spectra['snr'].attrs['long_name'] = "Signal to Noise Ratio"
+        spectra['snr'].attrs['units'] = "dB"
+        spectra['intensity'] = spectra['snr'] + 1.
+        spectra['intensity'].attrs['long_name'] = "Intensity (SNR + 1)"
+        spectra['intensity'].attrs['units'] = "dB"
+        spectra['intensity'] = \
+            spectra['intensity'].where(spectra.snr > snr_thresh)
+
+    if 'attenuated_backscatter' in which_moments:
+        spectra['attenuated_backscatter'] = xr.DataArray(
+            10 * np.log10(power), dims=('time', 'range'))
+        spectra['attenuated_backscatter'].attrs['long_name'] = \
+            "Attenuated backscatter"
+        spectra['attenuated_backscatter'].attrs['units'] = "dB"
+        spectra['attenuated_backscatter'] = \
+            spectra['attenuated_backscatter'].where(spectra.snr > snr_thresh)
+
+    if 'spectral_width' in which_moments or 'kurtosis' in which_moments or 'skewness' in which_moments:
+        spectral_width = _gpu_calc_spectral_width(
+            linear_psd, power, spectra['vel_bin_interp'].values,
+            velocity, dV, block_size=round(100 * block_size_ratio))
+
+    if 'spectral_width' in which_moments:
+        spectra['spectral_width'] = \
+            spectra['spectral_width'].where(spectra.snr > snr_thresh)
+        spectra['spectral_width'] = xr.DataArray(
+            spectral_width, dims=('time', 'range'))
+        spectra['spectral_width'].attrs["long_name"] = "Spectral width"
+        spectra['spectral_width'].attrs["units"] = "m s-1"
+
+    if 'skewness' in which_moments:
+        skewness = _gpu_calc_skewness(
+            linear_psd, power, my_spectra['vel_bin_interp'].values, velocity, spectral_width, dV,
+            block_size=round(100 * block_size_ratio))
+        spectra['skewness'] = xr.DataArray(skewness, dims=('time', 'range'))
+        spectra['skewness'] = spectra['skewness'].where(spectra.snr > snr_thresh)
+
+    if 'kurtosis' in which_moments:
+        kurtosis = _gpu_calc_kurtosis(
+            linear_psd, power, my_spectra['vel_bin_interp'].values, velocity, spectral_width, dV,
+            block_size=round(100 * block_size_ratio))
+        spectra['kurtosis'] = xr.DataArray(kurtosis, dims=('time', 'range'))
+        spectra['kurtosis'] = spectra['kurtosis'].where(spectra.snr > snr_thresh)
+
+    spectra.attrs['snr_mask'] = "%f dB" % snr_thresh
+
+    return spectra
