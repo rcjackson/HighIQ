@@ -25,7 +25,7 @@ def _fast_expand(complex_array, factor, num_per_block=200):
     return expanded_array
 
 
-def _gpu_moving_average(arr, num_per_block=200):
+def _gpu_moving_average(arr, window=8, num_per_block=200):
     shp = arr.shape
     times = shp[0]
     for k in range(0, times, num_per_block):
@@ -33,8 +33,9 @@ def _gpu_moving_average(arr, num_per_block=200):
         gpu_arr = cp.array(arr[k:the_max, :, :])
         gpu_arr2 = cp.zeros_like(gpu_arr)
         for i in range(shp[2]):
-            the_max2 = min([i + 8, shp[2]])
-            gpu_arr2[:, :, i] = cp.mean(gpu_arr[:, :, i:the_max2], axis=2)
+            the_min2 = max([0, i - int(window / 2)])
+            the_max2 = min([i + int(window / 2), shp[2]])
+            gpu_arr2[:, :, i] = cp.mean(gpu_arr[:, :, the_min2:the_max2], axis=2)
         arr[k:the_max, ::] = gpu_arr2.get()
         del gpu_arr, gpu_arr2
     return arr

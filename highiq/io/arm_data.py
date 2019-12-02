@@ -1,7 +1,7 @@
 import act
 
 
-def load_arm_netcdf(arm_ds, **kwargs):
+def load_arm_netcdf(arm_file, **kwargs):
     """
 
     This loads netCDF data that are in the Atmospheric Radiation Measurement standard netCDF format.
@@ -9,7 +9,7 @@ def load_arm_netcdf(arm_ds, **kwargs):
 
     Parameters
     ----------
-    arm_ds: str
+    arm_file: str
         The path to the dataset to load.
 
     Additional keyword arguments are passed into :func:`act.io.armfiles.read_netcdf`
@@ -17,6 +17,6 @@ def load_arm_netcdf(arm_ds, **kwargs):
     Returns
     -------
     ds: ACT Dataset
-        Returns the ACT dataset (xarray dataset) that 
+        Returns the ACT dataset (xarray dataset) that
     """
     return act.io.armfiles.read_netcdf(arm_file, **kwargs)
