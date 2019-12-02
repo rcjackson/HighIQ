@@ -1,0 +1,19 @@
+include CONTRIBUTING.rst
+include README.rst
+include CREATING_ENVIRONMENTS.rst
+include requirements.txt
+include requirements-dev.txt
+include LICENSE.txt
+
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-include act/plotting *.txt
+
+recursive-include docs *.rst conf.py Makefile make.bat
+recursive-include act/tests/data *.cdf *.nc *.data
+
+include versioneer.py
+include act/_version.py
+
+# If including data files in the package, add them like:
+# include path/to/data_file
