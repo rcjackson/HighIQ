@@ -24,16 +24,29 @@ author = 'Bobby Jackson'
 # The full version, including alpha/beta/rc tags
 release = '1.0'
 
+extensions = [
+    'sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
+    'sphinx.ext.githubpages',
+    'sphinx.ext.intersphinx',
+    'sphinx.ext.mathjax',
+    'sphinx.ext.viewcode',
+    'IPython.sphinxext.ipython_directive',
+    'IPython.sphinxext.ipython_console_highlighting',
+    'matplotlib.sphinxext.plot_directive',
+    'numpydoc',
+    'sphinx_copybutton',
+    'sphinx_gallery.gen_gallery',
+]
 
 # -- General configuration ---------------------------------------------------
 
-# Add any Sphinx extension module names here, as strings. They can be
-# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
-# ones.
-extensions = [
-]
+sphinx_gallery_conf = {
+    'examples_dirs': '../../examples',
+    'gallery_dirs': 'source/auto_examples'
+}
 
-# Add any paths that contain templates here, relative to this directory.
+#Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
 # List of patterns, relative to source directory, that match files and
