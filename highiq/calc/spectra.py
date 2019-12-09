@@ -91,7 +91,7 @@ def welchs_method(complex_coeff, fs=50e6, nfft=32, window_skip=16, num_per_block
 
 
 def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=32,
-            acf_name='acf', acf_bkg_name='acf_bkg', m_per_sample=3.):
+            acf_name='acf', acf_bkg_name='acf_bkg', block_size_ratio=1.0):
     """
     This function will get the power spectral density from the autocorrelation function.
 
@@ -116,9 +116,9 @@ def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=32,
         The name of the autocorrelation function field.
     acf_bkg_name: str
         The name of the autocorrelation function of the background.
-    m_per_sample: float
-        The number
-
+    block_size_ratio: float
+        Increase this value to use more GPU memory for processing. Doing this can
+        poentially optimize processing.
     Returns
     -------
     spectra: ACT Dataset
@@ -151,7 +151,8 @@ def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=32,
         complex_coeff, (complex_coeff.shape[0],
                         int(complex_coeff.shape[1] / num_gates),
                         int(complex_coeff.shape[2] * num_gates)))
-    freq, power = welchs_method(complex_coeff, fs=fs, nfft=nfft)
+    freq, power = welchs_method(
+        complex_coeff, fs=fs, nfft=nfft, num_per_block=int(block_size_ratio*200))
     attrs_dict = {'long_name': 'Range', 'units': 'm'}
     spectra['range'] = xr.DataArray(
         gate_resolution * np.arange(int(complex_coeff.shape[1])),
@@ -176,7 +177,8 @@ def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=32,
         complex_coeff, (complex_coeff.shape[0],
                         int(complex_coeff.shape[1] / num_gates),
                         int(complex_coeff.shape[2] * num_gates)))
-    freq, power = welchs_method(complex_coeff, fs=50e6, nfft=32)
+    freq, power = welchs_method(
+        complex_coeff, fs=50e6, nfft=32, num_per_block=int(200*block_size_ratio))
     spectra['power_bkg'] = xr.DataArray(
         power[:, :, inds_sorted], dims=(('time', 'range', 'vel_bins')))
 
