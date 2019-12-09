@@ -230,14 +230,15 @@ def calc_num_peaks(my_spectra, **kwargs):
     ----------
     my_spectra: ACT Dataset
         The dataset to calculate the number of peaks for.
-
-    Additional keyword arguments are passed into :func:`scipy.signal.find_peaks`.
-    The default minimum height and width of the peak are set to 3 and 8 points
-    respectively.
+    kwargs:
+        Additional keyword arguments are passed into :func:`scipy.signal.find_peaks`.
+        The default minimum height and width of the peak are set to 3 and 8 points
+        respectively.
 
     Returns
     -------
-
+    my_spectra: ACT Dataset
+        The dataset with an 'npeaks' variable included that shows the number of peaks.
     """
     spectra = my_spectra['power_spectra_normed_interp']
     my_array = spectra.fillna(0).values
@@ -259,5 +260,7 @@ def calc_num_peaks(my_spectra, **kwargs):
             num_peaks[i, j] = len(
                 find_peaks(my_array[i,j], height=height, width=width, **kwargs)[0])
     my_spectra['npeaks'] = xr.DataArray(num_peaks, dims=('time', 'range'))
+    my_spectra['npeaks'].attrs['long_name'] = "Number of peaks in Doppler spectra"
+    my_spectra['npeaks'].attrs['units'] = "1"
 
     return my_spectra
