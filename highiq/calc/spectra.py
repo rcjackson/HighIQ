@@ -213,7 +213,7 @@ def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=32,
         _fast_expand(spectra['power_spectra_normed'].values, 8))
     spectra['power_spectra_normed_interp'] = xr.DataArray(
         my_array, dims=('time', 'range', 'vel_bin_interp'),)
-    spectra['power_spectra_normed_interp'].attrs['long_name'] = "Power spectral density"
+    spectra['power_spectra_normed_interp'].attrs['long_name'] = "p.d.f of power spectra"
     spectra['power_spectra_normed_interp'].attrs["units"] = "%"
 
     spectra['range'].attrs['long_name'] = "Range"

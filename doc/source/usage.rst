@@ -30,7 +30,7 @@ customize parameters such as the size of the range gate, sampling frequency, and
 number of points to include in the FFT. This function will add Doppler spectra
 variables 'power_spectra_density' which contains the power spectral density in
 :math:`dB\ m\ s^{-1}` and 'power_spectra_density_normed' which is normalized
-such that the integral under the curve is 1. The power spectra density are defined
+such that the integral under the curve is 100%. The power spectra density are defined
 at *nfft* points between the negative and positive Nyquist velocities of the
 radar or lidar.
 
@@ -50,16 +50,66 @@ Optimizing processing
 For both the processing of the Doppler spectra and moments, HighIQ will only store
 a portion of the dataset in the GPU's memory due to limitations. However, if you
 have a high amount of GPU memory, you may be able to optimize the processing
-by increasing the *
+by increasing the *block_size_ratio* keyword of both :func:`highiq.calc.get_lidar_moments` and
+:func:`highiq.calc.get_psd`.
 
 
-After the Doppler spectra are generated
+Plotting Spectra
+----------------
+Since the output arrays are xarray Datasets, the standard xarray plotting routines
+can be used to make visualizations. For example, in order to plot the Doppler spectra
+from the example file, we simply do::
 
-Plotting
---------
-In order to make plots of the output Doppler spectra.
+   $ # Load the data. This uses a module in the Atmospheric Community
+   $ # Toolkit to ensure that the input acf data are always
+   $ # entered into a 3D array of (time, nsamples, complex)
+   $
+   $ my_ds = highiq.io.load_arm_netcdf(highiq.testing.TEST_FILE)
+   $ my_ds_processed = highiq.calc.get_psd(my_ds)
+   $
+   $ # For plotting the spectra, simply use xarray's built in functionality
+   $ #
+   $ my_ds_processed.power_spectra_normed_interp.sel(range=400, method='nearest').plot()
 
-3D Visualization of spectra is easily done using the `Atmospheric Community Toolkit
+.. image:: images/spectra_plot.png
+   :width: 600
+
+The above example chooses the range gate that is 400 m away from the radar and will plot
+the Doppler spectra at that point. In this example, we are using the single test data point
+file that is contained within HighIQ's test file. For files with multiple time periods,
+selecting by time period is as easy as specifying a time keyword to the *sel* function in last line in
+the above example. The format of this time is a *datetime*, so selecting 2018-08-01 00:40:00 UTC would mean
+adding a :code:`time=datetime(2018, 8, 1, 0, 40, 0)` to the list of keywords.
+
+Plotting 2D time series
+-----------------------
+2D Visualization of spectra is easily done using the `Atmospheric Community Toolkit
 (ACT) <https://anl-digr.github.io/ACT>`_ One is encouraged to read the documentation
-and examples from ACT in order to learn how to create custom visualizations.
+and examples from ACT in order to learn how to create custom visualizations. For the
+majority of vertically-pointing observations, ACT's TimeSeriesDisplay object provides
+the functionality needed to create quicklook plots of the retrieved lidar moments.
+For example, in order to plot the radar moments from the example
+`file <https://drive.google.com/uc?export=download&id=1x7pT4K05wJufepBR_26N1wpLzCoEEr9H>`_, simply
+do::
 
+   $ import highiq
+   $ import act
+   $ my_ds = highiq.io.load_arm_netcdf('sgpdlacfC1.a1.20170804.000113.nc.v0')
+   $ my_ds = highiq.calc.get_psd(my_ds)
+   $ my_ds = highiq.calc.get_lidar_moments(my_ds)
+   $ # Make a stricter mask for Doppler velocity to favor excluding more noise
+   $ my_ds['doppler_velocity'] = my_ds['doppler_velocity'].where(my_ds.intensity > 1.2)
+
+   $ # With ACT, we set up a TimeSeriesDisplay object with two sub plots
+   $ my_display = act.plotting.TimeSeriesDisplay(my_ds, figsize=(10,7), subplot_shape=(2,))
+
+   $ # The plot function takes in the same kwargs as matplotlib's plotting routines
+   $ my_display.plot('intensity', subplot_index=(0,), cmap='act_HomeyerRainbow', vmin=1, vmax=10)
+   $ my_display.plot('doppler_velocity', subplot_index=(1,), cmap='act_balance', vmin=-5, vmax=5)
+   $ my_display.set_yrng([0, 5000], subplot_index=(0,))
+   $ my_display.set_yrng([0, 5000], subplot_index=(1,))
+   $ my_display.fig.savefig('spectra_difference.png', dpi=300)
+
+
+.. image:: images/spectra_example.png
+   :width: 1200

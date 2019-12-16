@@ -10,7 +10,7 @@ This is a package for processing radar and lidar autocorrelation function (ACF)
 data using NVIDIA GPUs. This was built with the intent to be ran on CUDA-compatible computers,
 such as Argonne National Laboratory's `Waggle <https://wa8.gl>`_ nodes.
 Therefore, much radar processing can be done live with the ability to create an initial processed
-product (i.e. NOAA's Level 2 or ARM's b1).
+product (i.e. NOAA's Level 2 or ARM's b1) on any computer with a CUDA-compatible device.
 
 This toolkit is based around the `Atmospheric Community Toolkit <https://anl-digr.github.io/ACT/>`_
 which uses `xarray <https://xarray.pydata.org>`_ as its data model. The built in I/O module
@@ -24,6 +24,7 @@ width, skewness, and kurtosis from raw lidar signals.
 
    installation
    usage
+   contributing
    API/index.rst
 
 Indices and tables
