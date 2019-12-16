@@ -15,4 +15,5 @@ dependencies:
   - xarray
   - flake8
   - cupy
+  - cudatoolkit
   - pint=0.8.1

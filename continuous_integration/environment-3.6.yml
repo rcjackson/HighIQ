@@ -16,3 +16,4 @@ dependencies:
   - ipython
   - pint=0.8.1
   - cupy
+  - cudatoolkit
