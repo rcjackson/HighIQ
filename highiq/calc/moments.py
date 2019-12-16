@@ -122,12 +122,39 @@ def _gpu_calc_kurtosis(psd, power, vel_bins, velocity, spec_width, dV, block_siz
     return kurtosis
 
 
-def get_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments=None):
+def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments=None):
+    """
+    This function will retrieve the lidar moments of the Doppler spectra.
+
+    Parameters
+    ----------
+    spectra: ACT Dataset
+        The dataset containing the processed Doppler spectral density functions.
+    snr_thresh: float
+        The minimum signal to noise ratio to use as an initial mask of noise.
+    block_size_ratio: float
+        This value is used to determine how much data the GPU will process in one loop. If your
+        GPU has more memory, you may be able to optimize processing by raising this number. In
+        addition, if you encounter out of memory errors, try lowering this number, ensuring that
+        it is a positive floating point number.
+    which_moments: list or None
+        This tells HighIQ which moments should be processed. If this list is None, then the
+        signal to noise ratio, doppler velocity, spectral width, skewness,
+        and kurtosis will be calculated.
+
+    Returns
+    -------
+    spectra:
+        The database with the Doppler lidar moments.
+    """
     if which_moments is None:
-        which_moments = ['snr', 'attenuated_backscatter', 'doppler_velocity', 'spectral_width',
+        which_moments = ['snr', 'doppler_velocity', 'spectral_width',
                          'skewness', 'kurtosis']
     else:
         which_moments = [x.lower() for x in which_moments]
+
+    if not block_size_ratio > 0:
+        raise ValueError("block_size_ratio must be a positive floating point number!")
 
     dV = np.diff(spectra['vel_bins'])[0]
     linear_psd = spectra['power_spectral_density_interp']
@@ -177,16 +204,6 @@ def get_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments=None)
             spectra['doppler_velocity_max_peak'].where(spectra.snr > snr_thresh)
         spectra['doppler_velocity'] = spectra['doppler_velocity'].where(
             spectra.snr > snr_thresh)
-
-    if 'attenuated_backscatter' in which_moments:
-        spectra['attenuated_backscatter'] = xr.DataArray(
-            10 * np.log10(power), dims=('time', 'range'))
-        spectra['attenuated_backscatter'].attrs['long_name'] = \
-            "Attenuated backscatter"
-        spectra['attenuated_backscatter'].attrs['units'] = "dB"
-        if 'snr' in which_moments:
-            spectra['attenuated_backscatter'] = \
-                spectra['attenuated_backscatter'].where(spectra.snr > snr_thresh)
 
     if 'spectral_width' in which_moments or 'kurtosis' in which_moments or 'skewness' in which_moments:
         spectral_width = _gpu_calc_spectral_width(

@@ -17,6 +17,6 @@ def load_arm_netcdf(arm_file, **kwargs):
     Returns
     -------
     ds: ACT Dataset
-        Returns the ACT dataset (xarray dataset) that
+        Returns the ACT dataset (xarray dataset) that contains the autocorrelation functions.
     """
     return act.io.armfiles.read_netcdf(arm_file, **kwargs)

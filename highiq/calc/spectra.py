@@ -91,7 +91,7 @@ def welchs_method(complex_coeff, fs=50e6, nfft=32, window_skip=16, num_per_block
 
 
 def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=32,
-            acf_name='acf', acf_bkg_name='acf_bkg', m_per_sample=3.):
+            acf_name='acf', acf_bkg_name='acf_bkg', block_size_ratio=1.0):
     """
     This function will get the power spectral density from the autocorrelation function.
 
@@ -116,9 +116,9 @@ def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=32,
         The name of the autocorrelation function field.
     acf_bkg_name: str
         The name of the autocorrelation function of the background.
-    m_per_sample: float
-        The number
-
+    block_size_ratio: float
+        Increase this value to use more GPU memory for processing. Doing this can
+        poentially optimize processing.
     Returns
     -------
     spectra: ACT Dataset
@@ -151,7 +151,8 @@ def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=32,
         complex_coeff, (complex_coeff.shape[0],
                         int(complex_coeff.shape[1] / num_gates),
                         int(complex_coeff.shape[2] * num_gates)))
-    freq, power = welchs_method(complex_coeff, fs=fs, nfft=nfft)
+    freq, power = welchs_method(
+        complex_coeff, fs=fs, nfft=nfft, num_per_block=int(block_size_ratio*200))
     attrs_dict = {'long_name': 'Range', 'units': 'm'}
     spectra['range'] = xr.DataArray(
         gate_resolution * np.arange(int(complex_coeff.shape[1])),
@@ -176,7 +177,8 @@ def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=32,
         complex_coeff, (complex_coeff.shape[0],
                         int(complex_coeff.shape[1] / num_gates),
                         int(complex_coeff.shape[2] * num_gates)))
-    freq, power = welchs_method(complex_coeff, fs=50e6, nfft=32)
+    freq, power = welchs_method(
+        complex_coeff, fs=50e6, nfft=32, num_per_block=int(200*block_size_ratio))
     spectra['power_bkg'] = xr.DataArray(
         power[:, :, inds_sorted], dims=(('time', 'range', 'vel_bins')))
 
@@ -211,7 +213,7 @@ def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=32,
         _fast_expand(spectra['power_spectra_normed'].values, 8))
     spectra['power_spectra_normed_interp'] = xr.DataArray(
         my_array, dims=('time', 'range', 'vel_bin_interp'),)
-    spectra['power_spectra_normed_interp'].attrs['long_name'] = "Power spectral density"
+    spectra['power_spectra_normed_interp'].attrs['long_name'] = "p.d.f of power spectra"
     spectra['power_spectra_normed_interp'].attrs["units"] = "%"
 
     spectra['range'].attrs['long_name'] = "Range"
@@ -230,14 +232,15 @@ def calc_num_peaks(my_spectra, **kwargs):
     ----------
     my_spectra: ACT Dataset
         The dataset to calculate the number of peaks for.
-
-    Additional keyword arguments are passed into :func:`scipy.signal.find_peaks`.
-    The default minimum height and width of the peak are set to 3 and 8 points
-    respectively.
+    kwargs:
+        Additional keyword arguments are passed into :func:`scipy.signal.find_peaks`.
+        The default minimum height and width of the peak are set to 3 and 8 points
+        respectively.
 
     Returns
     -------
-
+    my_spectra: ACT Dataset
+        The dataset with an 'npeaks' variable included that shows the number of peaks.
     """
     spectra = my_spectra['power_spectra_normed_interp']
     my_array = spectra.fillna(0).values
@@ -259,5 +262,7 @@ def calc_num_peaks(my_spectra, **kwargs):
             num_peaks[i, j] = len(
                 find_peaks(my_array[i,j], height=height, width=width, **kwargs)[0])
     my_spectra['npeaks'] = xr.DataArray(num_peaks, dims=('time', 'range'))
+    my_spectra['npeaks'].attrs['long_name'] = "Number of peaks in Doppler spectra"
+    my_spectra['npeaks'].attrs['units'] = "1"
 
     return my_spectra
