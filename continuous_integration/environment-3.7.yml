@@ -14,4 +14,5 @@ dependencies:
   - dask
   - xarray
   - flake8
+  - cupy
   - pint=0.8.1
