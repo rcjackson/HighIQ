@@ -1,0 +1,27 @@
+sudo: false
+language: python
+
+env:
+      global:
+        # Doctr deploy key for openradar/HighIQ
+        - secure: "iHgMWrUTjOzZcdI92fR12GYbOjeMCStnsANFNC78O9TkcBK/02/CSFss1JsQYPBxP45l31eo+u2pcyiaQO16pvtYuwUrDANCgLqDU3ykyMTfkygyKozrHkBwDySgvIohQT3+iNHB2zmW/dC06Loel19gahXslNLGvYUzBUygFuFXKYQVwUBVrnRNDxfyRpj3uNYrz7wVns19VMUeU2xEYsBJ1j7qDrSEw9+Y3QZWkTSXev+CYYr84HGeJFegWW2zhzd6coU+lHjLSNaK7AbJS21Swqtpw5l37GyvOuO3IVMgGt853Ano7F7zbZ3NkTzDI/+NmbZ1iqBR95DsMCNzaVjCl+vvSttbivtA2CYCLTwTMKwJJM0fa6ef0ezIPp8W7K33FAYXR+LfkrAPsJqj1V486mMuC61ynfjbtIbkdfGnHyTGd0ba6Y/h1vz0fmawWshsBubCjv8gKtaRDGqdkBydYjLhxwK7lPPyvZm/2EeQ4dBi68HDaNgbgz7j5D0LSHLMNNlXJ3p/l//psbLnSUrrYQJzKign60kJOtOgtia6rGyZUwqjxyV+NyaVFjYXUKng49SgeJYm7OYJBVHOphz5zeEfqmQBnkQplUhP5tik5EQBtep7Plu5FSZoqREpSJsXWZe5q/vzBozCxAT1gARXCj5zT2fCuOlPCA6lm8Y="
+
+matrix:
+    include:
+    - python: 3.6
+      env:
+        - PYTHON_VERSION="3.6"
+        - DOC_BUILD="true"
+    - python: 3.7
+      sudo: yes
+      dist: xenial
+      env:
+        - PYTHON_VERSION="3.7"
+        - DOC_BUILD="true"
+    
+install: 
+    - source continuous_integration/install.sh
+script: 
+    - eval xvfb-run pytest
+after_success:
+    - source continuous_integration/build_docs.sh;        

@@ -105,3 +105,6 @@ venv.bak/
 
 # PyCharm stuff
 .idea/
+
+# .swp files
+*.swp
