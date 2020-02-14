@@ -144,7 +144,7 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
 
     Returns
     -------
-    spectra:
+    spectra: ACT Dataset
         The database with the Doppler lidar moments.
     """
     if which_moments is None:

@@ -84,8 +84,9 @@ adding a :code:`time=datetime(2018, 8, 1, 0, 40, 0)` to the list of keywords.
 Plotting 2D time series
 -----------------------
 2D Visualization of spectra is easily done using the `Atmospheric Community Toolkit
-(ACT) <https://anl-digr.github.io/ACT>`_ One is encouraged to read the documentation
-and examples from ACT in order to learn how to create custom visualizations. For the
+(ACT) <https://arm-doe.github.io/ACT>`_. One is encouraged to read the documentation
+and `examples <https://arm-doe.github.io/ACT/source/auto_examples/index.html>`_
+from ACT in order to learn how to create custom visualizations. For the
 majority of vertically-pointing observations, ACT's TimeSeriesDisplay object provides
 the functionality needed to create quicklook plots of the retrieved lidar moments.
 For example, in order to plot the radar moments from the example
@@ -113,3 +114,5 @@ do::
 
 .. image:: images/spectra_example.png
    :width: 1200
+
+This code will make two subplots that look like the image above.

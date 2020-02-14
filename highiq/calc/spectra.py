@@ -119,6 +119,7 @@ def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=32,
     block_size_ratio: float
         Increase this value to use more GPU memory for processing. Doing this can
         poentially optimize processing.
+
     Returns
     -------
     spectra: ACT Dataset
@@ -201,8 +202,6 @@ def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=32,
     interpolated_bins = np.linspace(
         spectra['vel_bins'].values[0], spectra['vel_bins'].values[-1], 256)
     spectra['vel_bin_interp'] = xr.DataArray(interpolated_bins, dims=('vel_bin_interp'))
-    spectra['vel_bin_interp'].attrs['long_name'] = "Doppler velocity"
-    spectra['vel_bin_interp'].attrs["units"] = "m s-1"
     my_array = _gpu_moving_average(
         _fast_expand(spectra['power_spectral_density'].values, 8))
     spectra['power_spectral_density_interp'] = xr.DataArray(
@@ -220,6 +219,8 @@ def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=32,
     spectra['range'].attrs['units'] = 'm'
     spectra['vel_bins'].attrs['long_name'] = "Doppler velocity"
     spectra['vel_bins'].attrs['units'] = 'm s-1'
+    spectra['vel_bin_interp'].attrs['long_name'] = "Doppler velocity"
+    spectra['vel_bin_interp'].attrs["units"] = "m s-1"
     return spectra
 
 
