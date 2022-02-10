@@ -9,10 +9,10 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 
 # Load an example ARM compliant-file
-test_file = highiq.io.load_arm_netcdf(highiq.testing.TEST_FILE)
-
+test_file = highiq.io.load_arm_netcdf('/Users/rjackson/Downloads/sgpdlacfC1.a1.20170804.000113.nc.v0')
+print(test_file)
 # Get the particle size distributions
-my_ds = highiq.calc.get_psd(test_file)
+out_ds = highiq.calc.get_psd(test_file)
 
 # Plot the power spectra for a given time and height
 my_time = datetime(2017, 8, 4, 0, 40, 59)
