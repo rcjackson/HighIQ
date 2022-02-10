@@ -13,8 +13,7 @@ This module contains the methods that do the core calculations of HighIQ.
     get_lidar_moments
     get_psd
     calc_num_peaks
-    welchs_method
 
 """
 from .moments import get_lidar_moments
-from .spectra import get_psd, calc_num_peaks, welchs_method
+from .spectra import get_psd, calc_num_peaks

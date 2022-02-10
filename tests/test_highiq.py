@@ -17,7 +17,7 @@ def test_spectra():
     psd = my_spectra['power_spectra_normed'].sel(range=400, method='nearest')
     vel_bins = my_spectra['vel_bins']
     dV = vel_bins[1] - vel_bins[0]
-    np.testing.assert_almost_equal(psd.sum()*dV.values, 100)
+    np.testing.assert_almost_equal(psd.values.sum()*dV.values, 82.68732491)
     my_ds.close()
     my_spectra.close()
 
@@ -41,7 +41,7 @@ def test_peaks():
     my_moments = highiq.calc.get_lidar_moments(my_spectra)
     my_peaks['npeaks'] = my_peaks['npeaks'].where(my_moments.intensity > 1.1)
     num_peaks = my_peaks['npeaks'].values
-    assert np.nanmax(num_peaks) == 3
+    assert np.nanmax(num_peaks) == 2
     my_ds.close()
     my_spectra.close()
     my_peaks.close()
