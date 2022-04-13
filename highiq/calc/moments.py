@@ -218,8 +218,8 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
         spectra['kurtosis'] = xr.DataArray(kurtosis, dims=('time', 'range'))
         if 'snr' in which_moments:
             spectra['kurtosis'] = spectra['kurtosis'].where(spectra.snr > snr_thresh)
-        spectra['skewness'].attrs["long_name"] = "Kurtosis"
-        spectra['skewness'].attrs["units"] = "m^4 s^-4"
+        spectra['kurtosis'].attrs["long_name"] = "Kurtosis"
+        spectra['kurtosis'].attrs["units"] = "m^4 s^-4"
 
     spectra['range'].attrs['long_name'] = "Range"
     spectra['range'].attrs['units'] = 'm'

@@ -69,7 +69,13 @@ def read_00_data(file_name, home_point, site='sgp.C1', **kwargs):
                           'lidar_longitude',
                           'lidar_altitude',
                           'lidar_home_point', 'Descriptive comment']
-    hfile = pd.read_csv(home_point, skiprows=23, names=home_point_columns)
+    num_rows_to_skip = 0
+    with open(home_point) as hf:
+        for line in hf:
+            if line[0] == "#":
+                num_rows_to_skip += 1
+
+    hfile = pd.read_csv(home_point, skiprows=num_rows_to_skip, names=home_point_columns)
     background_vals = global_attrs['number_of_lags'][site]\
                       * global_attrs['number_of_samples_per_lag'][site] * 2
     nlags = global_attrs['number_of_lags'][site]
