@@ -28,7 +28,7 @@ def _fast_expand(complex_array, factor, num_per_block=200):
         expanded_array[:, :, factor * l:factor * (l + 1)] = temp_array.numpy()
     return expanded_array
 
-def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=32,
+def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=1024,
             acf_name='acf', acf_bkg_name='acf_bkg', block_size_ratio=1.0):
     """
     This function will get the power spectral density from the autocorrelation function.
@@ -91,18 +91,7 @@ def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=32,
                                 int(complex_coeff.shape[1] / (num_gates)),
                                 int(complex_coeff.shape[2] * num_gates)))
     ntimes = complex_coeff.shape[0]
-    frames = tf.signal.frame(complex_coeff, frame_length=int(nfft),
-                             frame_step=16, pad_end=True)
-    window = tf.signal.hann_window(32).numpy()
-    multiples = (frames.shape[0], frames.shape[1], frames.shape[2], 1)
-    window = np.tile(window, multiples)
-    power = np.square(tf.math.abs(tf.signal.fft(frames * window)))
-    power = power.mean(axis=2)
     freq = np.fft.fftfreq(nfft) * fs
-    attrs_dict = {'long_name': 'Range', 'units': 'm'}
-    spectra['range'] = xr.DataArray(
-        gate_resolution * np.arange(int(frames.shape[1])),
-        dims=('range'), attrs=attrs_dict)
 
     spectra.attrs['nyquist_velocity'] = "%f m s-1" % (wavelength / (4 * 1 / fs))
     spectra['freq_bins'] = xr.DataArray(freq, dims=['freq'])
@@ -115,18 +104,30 @@ def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=32,
     spectra['vel_bins'] = xr.DataArray(vel_bins, dims=('vel_bins'), attrs=attrs_dict)
     spectra['freq_bins'] = spectra['freq_bins'][inds_sorted]
 
+
+    complex_coeff_bkg = (spectra[acf_bkg_name].isel(complex=0).values +
+                        spectra[acf_bkg_name].isel(complex=1).values * 1j)
+    complex_coeff_bkg = np.reshape(complex_coeff_bkg,
+                               (int(complex_coeff_bkg.shape[0] / num_gates),
+                                int(complex_coeff_bkg.shape[1] * num_gates)))
+    frames = tf.signal.frame(complex_coeff,
+                             frame_length=int(nfft),
+                             frame_step=int(nfft / 2), pad_end=True)
+    window = tf.signal.hann_window(nfft).numpy()
+    multiples = (frames.shape[0], frames.shape[1], frames.shape[2], 1)
+    window = np.tile(window, multiples)
+    power = np.square(tf.math.abs(tf.signal.fft(frames * window)))
+    power = power.mean(axis=2)
+    attrs_dict = {'long_name': 'Range', 'units': 'm'}
+    spectra['range'] = xr.DataArray(
+        gate_resolution * np.arange(int(frames.shape[1])),
+        dims=('range'), attrs=attrs_dict)
+
     spectra['power'] = xr.DataArray(
         power[:, :, inds_sorted], dims=(('time', 'range', 'vel_bins')))
-
-    complex_coeff = (spectra[acf_bkg_name].isel(complex=0).values +
-                     spectra[acf_bkg_name].isel(complex=1).values * 1j)
-    complex_coeff = np.reshape(complex_coeff,
-                               (int(complex_coeff.shape[0] / num_gates),
-                                int(complex_coeff.shape[1] * num_gates)))
-
-    frames = tf.signal.frame(complex_coeff, frame_length=int(nfft),
-                             frame_step=16, pad_end=True)
-    window = tf.signal.hann_window(32).numpy()
+    frames = tf.signal.frame(complex_coeff_bkg, frame_length=int(nfft),
+                             frame_step=int(nfft / 2), pad_end=True)
+    window = tf.signal.hann_window(nfft).numpy()
     multiples = (frames.shape[0], frames.shape[1],  1)
     window = np.tile(window, multiples)
     power = np.square(tf.abs(tf.signal.fft(frames * window)))
@@ -135,48 +136,19 @@ def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=32,
         power[:, inds_sorted], dims=('range', 'vel_bins'))
 
     # Subtract background noise
-    spectra['power_spectral_density'] = spectra['power'] - \
+    spectra['power_spectral_density'] = spectra['power'] / \
                                         np.tile(spectra['power_bkg'], (ntimes, 1, 1))
     spectra['power_spectral_density'] = spectra['power_spectral_density'].where(
         spectra['power_spectral_density'] > 0, 0)
     spectra['power_spectral_density'].attrs["long_name"] = "Power spectral density"
-    dV = np.diff(spectra['vel_bins'])
-    tot_power = np.sum(spectra['power_spectral_density'].values, axis=2) * dV[1]
 
-    power_tiled = np.stack(
-        [tot_power for x in range(spectra['power'].values.shape[2])], axis=2)
-    spectra['power_spectra_normed'] = spectra['power_spectral_density'] / power_tiled / dV[1] * 100
-    spectra['power_spectra_normed'].attrs["long_name"] = "p.d.f. of power spectra"
-    spectra['power_spectra_normed'].attrs["units"] = "%"
-    spectra['power_spectral_density'] = 10 * np.log10(spectra['power_spectral_density']) / dV[1]
-    spectra['power_spectral_density'].attrs["units"] = 's dB-1 m-1 '
+    spectra['power_spectral_density'].attrs["units"] = ''
 
-    # Smooth out power spectra
-    interpolated_bins = np.linspace(
-        spectra['vel_bins'].values[0], spectra['vel_bins'].values[-1], 256)
-    spectra['vel_bin_interp'] = xr.DataArray(interpolated_bins, dims=('vel_bin_interp'))
-
-    my_array = tf.nn.conv2d(
-        np.expand_dims(_fast_expand(spectra['power_spectral_density'].values, 8), axis=3),
-        np.ones((1, 16, 1, 1)) / 16, 1, 'SAME').numpy()[:, :, :, 0]
-    spectra['power_spectral_density_interp'] = xr.DataArray(
-        my_array, dims=('time', 'range', 'vel_bin_interp'))
-    spectra['power_spectral_density_interp'].attrs['long_name'] = "Power spectral density"
-    spectra['power_spectral_density_interp'].attrs["units"] = "s dB-1 m-1"
-    my_array = tf.nn.conv2d(
-        np.expand_dims(_fast_expand(spectra['power_spectra_normed'].values, 8), axis=3),
-        np.ones((1, 16, 1, 1)) / 16, 1, 'SAME').numpy()[:, :, :, 0]
-    spectra['power_spectra_normed_interp'] = xr.DataArray(
-        my_array, dims=('time', 'range', 'vel_bin_interp'),)
-    spectra['power_spectra_normed_interp'].attrs['long_name'] = "p.d.f of power spectra"
-    spectra['power_spectra_normed_interp'].attrs["units"] = "%"
 
     spectra['range'].attrs['long_name'] = "Range"
     spectra['range'].attrs['units'] = 'm'
     spectra['vel_bins'].attrs['long_name'] = "Doppler velocity"
     spectra['vel_bins'].attrs['units'] = 'm s-1'
-    spectra['vel_bin_interp'].attrs['long_name'] = "Doppler velocity"
-    spectra['vel_bin_interp'].attrs["units"] = "m s-1"
     return spectra
 
 
@@ -199,7 +171,7 @@ def calc_num_peaks(my_spectra, **kwargs):
     my_spectra: ACT Dataset
         The dataset with an 'npeaks' variable included that shows the number of peaks.
     """
-    spectra = my_spectra['power_spectra_normed_interp']
+    spectra = my_spectra['power_spectral_density']
     my_array = spectra.fillna(0).values
     shp = my_array.shape
     num_peaks = np.zeros((shp[0], shp[1]))
