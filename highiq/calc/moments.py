@@ -10,13 +10,13 @@ def _gpu_calc_power(psd, dV, block_size=200, normed=True):
     if len(shp) == 3:
         gpu_array = tf.constant(psd, dtype=tf.float32)
         if normed:
-            gpu_array = 10 ** (gpu_array / 10. * dV)
+            gpu_array = gpu_array * dV
         gpu_array = tf.math.reduce_sum(gpu_array, axis=2)
         power = gpu_array.numpy()
     else:
         gpu_array = tf.constant(psd.values, dtype=tf.float32)
         if normed:
-            gpu_array = 10 ** (gpu_array / 10. * dV)
+            gpu_array = gpu_array * dV
         gpu_array = tf.math.reduce_sum(gpu_array, axis=1)
         power = gpu_array.numpy()
 
@@ -29,7 +29,6 @@ def _gpu_calc_velocity(psd, power, vel_bins, dV):
     gpu_array = tf.constant(psd, dtype=tf.float32)
     power_array = tf.constant(power, dtype=tf.float32)
     vel_bins_tiled = np.tile(vel_bins, (shp[0], shp[1], 1))
-    gpu_array = 10 ** (gpu_array / 10. * dV)
     gpu_array = 1 / power_array * tf.math.reduce_sum(gpu_array * vel_bins_tiled, axis=2)
     velocity = gpu_array.numpy()
     return velocity
@@ -56,7 +55,6 @@ def _gpu_calc_spectral_width(psd, power, vel_bins, velocity, dV):
 
     velocity_array = tf.transpose(np.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
     vel_bins_tiled = np.tile(vel_bins, (times, shp[1], 1))
-    gpu_array = 10 ** (gpu_array/10.*dV)
     gpu_array = tf.math.sqrt(1 / power_array *
                         tf.math.reduce_sum(
                             (vel_bins_tiled - velocity_array)**2 * gpu_array, axis=2))
@@ -68,7 +66,7 @@ def _gpu_snr(power, noise):
     shp = power.shape
     power_array = tf.constant(power, dtype=tf.float32)
     gpu_noise = tf.constant(noise, dtype=tf.float32)
-    power_array = 10*(tf.math.log(power_array / gpu_noise) / tf.math.log(10.))
+    power_array = 10. * (tf.math.log(power_array / gpu_noise) / tf.math.log(10.))
     snr = power_array.numpy()
     return snr
 
@@ -83,7 +81,6 @@ def _gpu_calc_skewness(psd, power, vel_bins, velocity, spec_width, dV):
 
     velocity_array = tf.transpose(np.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
     vel_bins_tiled = np.tile(vel_bins, (times, shp[1], 1))
-    gpu_array = 10 ** (gpu_array/10. * dV)
     gpu_array = 1 / power_array * tf.math.reduce_sum(
             (vel_bins_tiled - velocity_array)**3 * gpu_array, axis=2)
     skewness = gpu_array.numpy()
@@ -101,8 +98,7 @@ def _gpu_calc_kurtosis(psd, power, vel_bins, velocity, spec_width, dV):
     power_array *= spec_width_array**4
     velocity_array = tf.transpose(np.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
     vel_bins_tiled = np.tile(vel_bins, (shp[0], shp[1], 1))
-    gpu_array = 10**(gpu_array/10.*dV)
-    gpu_array = 1/power_array*tf.math.reduce_sum(
+    gpu_array = 1 / power_array * tf.math.reduce_sum(
         (vel_bins_tiled - velocity_array)**4 * gpu_array, axis=2)
     kurtosis = gpu_array.numpy()
     return kurtosis
@@ -143,7 +139,7 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
         raise ValueError("block_size_ratio must be a positive floating point number!")
 
     dV = np.diff(spectra['vel_bins'])[0]
-    linear_psd = spectra['power_spectral_density_interp']
+    linear_psd = spectra['power_spectral_density']
     linear_psd_0filled = linear_psd.fillna(0).values
     power = _gpu_calc_power(
         linear_psd_0filled, dV)
@@ -151,7 +147,7 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
         'skewness' in which_moments or 'kurtosis' in which_moments):
         velocity = _gpu_calc_velocity(
             linear_psd_0filled, power,
-            spectra['vel_bin_interp'].values, dV)
+            spectra['vel_bins'].values, dV)
 
     spectra['noise'] = spectra['power_bkg'].sum(axis=-1)
     if 'snr' in which_moments:
@@ -173,7 +169,7 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
 
     if 'doppler_velocity' in which_moments:
         velocity_dumb = _gpu_calc_velocity_dumb(
-            linear_psd_0filled, spectra['vel_bin_interp'].values)
+            linear_psd_0filled, spectra['vel_bins'].values)
         spectra['doppler_velocity_max_peak'] = xr.DataArray(
             velocity_dumb, dims=('time', 'range'))
         spectra['doppler_velocity_max_peak'].attrs['long_name'] = \
@@ -192,7 +188,7 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
 
     if 'spectral_width' in which_moments or 'kurtosis' in which_moments or 'skewness' in which_moments:
         spectral_width = _gpu_calc_spectral_width(
-            linear_psd, power, spectra['vel_bin_interp'].values,
+            linear_psd, power, spectra['vel_bins'].values,
             velocity, dV)
 
     if 'spectral_width' in which_moments:
@@ -205,7 +201,7 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
 
     if 'skewness' in which_moments:
         skewness = _gpu_calc_skewness(
-            linear_psd, power, spectra['vel_bin_interp'].values, velocity, spectral_width, dV)
+            linear_psd, power, spectra['vel_bins'].values, velocity, spectral_width, dV)
         spectra['skewness'] = xr.DataArray(skewness, dims=('time', 'range'))
         if 'snr' in which_moments:
             spectra['skewness'] = spectra['skewness'].where(spectra.snr > snr_thresh)
@@ -214,7 +210,7 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
 
     if 'kurtosis' in which_moments:
         kurtosis = _gpu_calc_kurtosis(
-            linear_psd, power, spectra['vel_bin_interp'].values, velocity, spectral_width, dV)
+            linear_psd, power, spectra['vel_bins'].values, velocity, spectral_width, dV)
         spectra['kurtosis'] = xr.DataArray(kurtosis, dims=('time', 'range'))
         if 'snr' in which_moments:
             spectra['kurtosis'] = spectra['kurtosis'].where(spectra.snr > snr_thresh)
