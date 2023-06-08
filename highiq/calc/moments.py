@@ -139,24 +139,25 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
         raise ValueError("block_size_ratio must be a positive floating point number!")
 
     dV = np.diff(spectra['vel_bins'])[0]
-    linear_psd = spectra['power_spectral_density']
+    linear_psd = spectra['power_spectral_density'] - 1
     linear_psd_0filled = linear_psd.fillna(0).values
     power = _gpu_calc_power(
         linear_psd_0filled, dV)
+    nyquist_range = spectra['vel_bins'].values.max() - spectra['vel_bins'].values.min()
     if ('doppler_velocity' in which_moments or 'spectral_width' in which_moments or
         'skewness' in which_moments or 'kurtosis' in which_moments):
         velocity = _gpu_calc_velocity(
             linear_psd_0filled, power,
             spectra['vel_bins'].values, dV)
-
-    spectra['noise'] = spectra['power_bkg'].sum(axis=-1)
+    
     if 'snr' in which_moments:
         power_with_noise = _gpu_calc_power(
-            spectra['power'].values, dV,
-            normed=False)
+            spectra['power_spectral_density'].values, dV,
+            normed=True)
         power_with_noise = xr.DataArray(power_with_noise, dims=('time', 'range'))
         spectra['snr'] = xr.DataArray(
-            _gpu_snr(power_with_noise.values, spectra['noise'].values),
+            _gpu_snr(power_with_noise.values, 
+                np.ones_like(power_with_noise) * nyquist_range),
             dims=('time', 'range'))
         spectra['snr'].attrs['long_name'] = "Signal to Noise Ratio"
         spectra['snr'].attrs['units'] = "dB"

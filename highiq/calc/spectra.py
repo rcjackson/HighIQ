@@ -28,7 +28,7 @@ def _fast_expand(complex_array, factor, num_per_block=200):
         expanded_array[:, :, factor * l:factor * (l + 1)] = temp_array.numpy()
     return expanded_array
 
-def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=1024,
+def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024,
             acf_name='acf', acf_bkg_name='acf_bkg', block_size_ratio=1.0):
     """
     This function will get the power spectral density from the autocorrelation function.
@@ -84,12 +84,17 @@ def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=1024,
 
 
     num_gates = int(gate_resolution / 3)
-    complex_coeff = spectra[acf_name].isel(complex=0).values +\
-                    spectra[acf_name].isel(complex=1).values * 1j
-    complex_coeff = np.reshape(complex_coeff,
-                               (complex_coeff.shape[0],
-                                int(complex_coeff.shape[1] / (num_gates)),
-                                int(complex_coeff.shape[2] * num_gates)))
+    complex_coeff_in = spectra[acf_name].isel(complex=0).values +\
+                       spectra[acf_name].isel(complex=1).values * 1j
+    num_lags = complex_coeff_in.shape[1]
+    complex_coeff = np.zeros(
+            (complex_coeff_in.shape[0], int(complex_coeff_in.shape[1] / num_gates),
+                complex_coeff_in.shape[2]), dtype=np.complex128)
+    for i in range(complex_coeff.shape[1]):
+        complex_coeff[:, i, :] = np.sum(complex_coeff_in[
+                :, (num_gates * i):(num_gates * i+1), :], axis=1)
+    del complex_coeff_in
+    
     ntimes = complex_coeff.shape[0]
     freq = np.fft.fftfreq(nfft) * fs
 
@@ -104,33 +109,32 @@ def get_psd(spectra, gate_resolution=30., wavelength=None, fs=None, nfft=1024,
     spectra['vel_bins'] = xr.DataArray(vel_bins, dims=('vel_bins'), attrs=attrs_dict)
     spectra['freq_bins'] = spectra['freq_bins'][inds_sorted]
 
-
-    complex_coeff_bkg = (spectra[acf_bkg_name].isel(complex=0).values +
+    complex_coeff_bkg_in = (spectra[acf_bkg_name].isel(complex=0).values +
                         spectra[acf_bkg_name].isel(complex=1).values * 1j)
-    complex_coeff_bkg = np.reshape(complex_coeff_bkg,
-                               (int(complex_coeff_bkg.shape[0] / num_gates),
-                                int(complex_coeff_bkg.shape[1] * num_gates)))
+
+    complex_coeff_bkg = np.zeros(
+            (int(complex_coeff_bkg_in.shape[0] / num_gates), complex_coeff_bkg_in.shape[1]),
+            dtype=np.complex128)
+    for i in range(complex_coeff_bkg.shape[0]):
+        complex_coeff_bkg[i, :] = np.sum(complex_coeff_bkg_in[
+                (num_gates * i):(num_gates * i+1), :], axis=0)
+
     frames = tf.signal.frame(complex_coeff,
                              frame_length=int(nfft),
-                             frame_step=int(nfft / 2), pad_end=True)
-    window = tf.signal.hann_window(nfft).numpy()
+                             frame_step=int(nfft), pad_end=True)
     multiples = (frames.shape[0], frames.shape[1], frames.shape[2], 1)
-    window = np.tile(window, multiples)
-    power = np.square(tf.math.abs(tf.signal.fft(frames * window)))
+    power = np.abs(tf.signal.fft(frames).numpy())
     power = power.mean(axis=2)
     attrs_dict = {'long_name': 'Range', 'units': 'm'}
     spectra['range'] = xr.DataArray(
         gate_resolution * np.arange(int(frames.shape[1])),
         dims=('range'), attrs=attrs_dict)
-
     spectra['power'] = xr.DataArray(
         power[:, :, inds_sorted], dims=(('time', 'range', 'vel_bins')))
     frames = tf.signal.frame(complex_coeff_bkg, frame_length=int(nfft),
-                             frame_step=int(nfft / 2), pad_end=True)
-    window = tf.signal.hann_window(nfft).numpy()
+                             frame_step=int(nfft), pad_end=True)
     multiples = (frames.shape[0], frames.shape[1],  1)
-    window = np.tile(window, multiples)
-    power = np.square(tf.abs(tf.signal.fft(frames * window)))
+    power = np.abs(tf.signal.fft(frames).numpy())
     power = power.mean(axis=1)
     spectra['power_bkg'] = xr.DataArray(
         power[:, inds_sorted], dims=('range', 'vel_bins'))

@@ -88,11 +88,19 @@ def read_00_data(file_name, home_point, site='sgp.C1', **kwargs):
             date_str = x
         if len(x) == 6 and x.isnumeric():
             time_str = x
+        under_split = x.split("_")
+        for x in under_split:
+            print(x)
+            if len(x) == 8 and x.isnumeric():
+                date_str = x
+            if len(x) == 2 and x.isnumeric():
+                time_str = x + '0000'
+
     base_time = datetime.strptime('%s.%s' % (date_str, time_str), '%Y%m%d.%H%M%S')
     midnight = datetime(year=base_time.year, month=base_time.month,
                         day=base_time.day, hour=0, minute=0, second=0).timestamp()
     base_time_int = int(base_time.strftime("%Y%m%d%H%M%S"))
-    for i in range(len(hfile)):
+    for i in range(1, len(hfile)):
         num = int(hfile['start_time (yyyymmddhh)'][i])
         end_num = int(hfile['end_time (yyyymmddhh)'][i])
         if end_num == -1:
