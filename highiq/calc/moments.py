@@ -5,7 +5,6 @@ import xarray as xr
 
 def _gpu_calc_power(psd, dV, block_size=200, normed=True):
     shp = psd.shape
-    
     power = np.zeros((shp[0], shp[1]))
     if len(shp) == 3:
         gpu_array = tf.constant(psd, dtype=tf.float32)
@@ -25,7 +24,6 @@ def _gpu_calc_power(psd, dV, block_size=200, normed=True):
 
 def _gpu_calc_velocity(psd, power, vel_bins, dV):
     shp = psd.shape
-    times = shp[0]
     gpu_array = tf.constant(psd, dtype=tf.float32)
     power_array = tf.constant(power, dtype=tf.float32)
     vel_bins_tiled = np.tile(vel_bins, (shp[0], shp[1], 1))
@@ -35,7 +33,6 @@ def _gpu_calc_velocity(psd, power, vel_bins, dV):
 
 
 def _gpu_calc_velocity_dumb(psd, vel_bins):
-    shp = psd.shape
     dV = np.diff(vel_bins)[0]
     vel_min = vel_bins.min()
     gpu_array = tf.constant(psd)
@@ -55,9 +52,8 @@ def _gpu_calc_spectral_width(psd, power, vel_bins, velocity, dV):
 
     velocity_array = tf.transpose(np.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
     vel_bins_tiled = np.tile(vel_bins, (times, shp[1], 1))
-    gpu_array = tf.math.sqrt(1 / power_array *
-                        tf.math.reduce_sum(
-                            (vel_bins_tiled - velocity_array)**2 * gpu_array, axis=2))
+    gpu_array = tf.math.sqrt(1 / power_array * tf.math.reduce_sum(
+                             (vel_bins_tiled - velocity_array)**2 * gpu_array, axis=2))
     specwidth = gpu_array.numpy()
     return specwidth
 
@@ -73,16 +69,14 @@ def _gpu_calc_skewness(psd, power, vel_bins, velocity, spec_width, dV):
     velocity_array = tf.transpose(np.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
     vel_bins_tiled = np.tile(vel_bins, (times, shp[1], 1))
     gpu_array = 1 / power_array * tf.math.reduce_sum(
-            (vel_bins_tiled - velocity_array)**3 * gpu_array, axis=2)
+        (vel_bins_tiled - velocity_array)**3 * gpu_array, axis=2)
     skewness = gpu_array.numpy()
     return skewness
 
 
 def _gpu_calc_kurtosis(psd, power, vel_bins, velocity, spec_width, dV):
     shp = psd.shape
-    times = shp[0]
     kurtosis = np.zeros((shp[0], shp[1]))
-
     gpu_array = tf.constant(psd.values, dtype=tf.float32)
     power_array = tf.constant(power, dtype=tf.float32)
     spec_width_array = tf.constant(spec_width, dtype=tf.float32)
@@ -121,8 +115,7 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
         The database with the Doppler lidar moments.
     """
     if 'power_spectral_density' not in spectra.variables.keys():
-        raise ValueError("You must calculate the power spectra " + 
-                         "before calculating moments!")
+        raise ValueError("You must calculate the power spectra before calculating moments!")
     if which_moments is None:
         which_moments = ['snr', 'doppler_velocity', 'spectral_width',
                          'skewness', 'kurtosis']
@@ -137,13 +130,8 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
     linear_psd_0filled = linear_psd.fillna(0).values
     power = _gpu_calc_power(
         linear_psd_0filled, dV)
-    nyquist_range = spectra['vel_bins'].values.max() - spectra['vel_bins'].values.min()
-    if ('doppler_velocity' in which_moments or 'spectral_width' in which_moments or
-        'skewness' in which_moments or 'kurtosis' in which_moments):
-        velocity = _gpu_calc_velocity(
-            linear_psd_0filled, power,
-            spectra['vel_bins'].values, dV)
-    
+    velocity = _gpu_calc_velocity(linear_psd_0filled, power, spectra['vel_bins'].values, dV)
+
     if 'snr' in which_moments:
         power_with_noise = dV * spectra['power_spectral_density'].sum(dim='vel_bins')
         spectra['snr'] = power_with_noise / (dV * len(spectra['vel_bins']))

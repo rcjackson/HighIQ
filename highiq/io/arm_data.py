@@ -9,15 +9,10 @@ from datetime import datetime
 import numpy as np
 
 global_attrs = {'number_of_lags': {
-          'cor.M1': 7,
-          'hou.M1': 7,
-          'oli.M1': 7,
-          'sgp.C1': 20},
-              'number_of_samples_per_lag': {
-          'cor.M1': 3200,
-          'hou.M1': 3200,
-          'oli.M1': 1920,
-          'sgp.C1': 4000}}
+    'cor.M1': 7, 'hou.M1': 7, 'oli.M1': 7, 'sgp.C1': 20},
+    'number_of_samples_per_lag':
+        {'cor.M1': 3200, 'hou.M1': 3200, 'oli.M1': 1920, 'sgp.C1': 4000}}
+
 
 def load_arm_netcdf(arm_file, **kwargs):
     """
@@ -41,7 +36,7 @@ def load_arm_netcdf(arm_file, **kwargs):
     if 'time' not in ds['acf'].dims:
         ds['acf'] = ds['acf'].expand_dims('time')
     if 'time' not in ds['acf_bkg'].dims:
-        ds['acf_bkg'] = ds['acf_bkg'].expand_dims('time')
+        ds['acf_bkg'] = ds['acf_bkg'].expand_dims(dim={'time': len(ds.time)}, axis=0)
     return ds
 
 
@@ -77,8 +72,7 @@ def read_00_data(file_name, home_point, site='sgp.C1', **kwargs):
                 num_rows_to_skip += 1
 
     hfile = pd.read_csv(home_point, skiprows=num_rows_to_skip, names=home_point_columns)
-    background_vals = global_attrs['number_of_lags'][site]\
-                      * global_attrs['number_of_samples_per_lag'][site] * 2
+    background_vals = global_attrs['number_of_lags'][site] * global_attrs['number_of_samples_per_lag'][site] * 2
     nlags = global_attrs['number_of_lags'][site]
     num_samples = global_attrs['number_of_samples_per_lag'][site]
     background_bytes = 8 * background_vals
@@ -112,7 +106,6 @@ def read_00_data(file_name, home_point, site='sgp.C1', **kwargs):
             target_altitude = float(hfile['target_altitude'][i])
             lidar_latitude = float(hfile['lidar_latitude'][i])
             lidar_longitude = float(hfile['lidar_longitude'][i])
-            lidar_altitude = float(hfile['lidar_altitude'][i])
             lidar_home_point = float(hfile['lidar_home_point'][i])
 
     if site[:3] == "oli":
@@ -183,8 +176,7 @@ def read_00_data(file_name, home_point, site='sgp.C1', **kwargs):
     acf = xr.DataArray(acf, dims=('time', 'nsamples', 'nlags', 'complex'))
     acf.attrs["long_name"] = "Autocorrelation function"
     lidar_ds = xr.Dataset({'acf': acf, 'acf_bkg': acf_bkg,
-                          'aziumth': azimuth, 'time': timestamp,
-                          'elevation': elevation})
+                          'aziumth': azimuth, 'time': timestamp, 'elevation': elevation})
     lidar_ds = lidar_ds.sortby('time')
     lidar_ds.attrs["dlon"] = lidar_longitude
     lidar_ds.attrs["dlat"] = lidar_latitude
@@ -195,8 +187,3 @@ def read_00_data(file_name, home_point, site='sgp.C1', **kwargs):
     lidar_ds.attrs["sample_rate"] = "50 MHz"
     lidar_ds.attrs["wavelength"] = "1548 nm"
     return lidar_ds
-
-
-
-
-
