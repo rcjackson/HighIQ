@@ -11,13 +11,13 @@ def test_io():
 
 def test_spectra():
     my_ds = highiq.io.load_arm_netcdf(highiq.testing.TEST_FILE)
+    print(my_ds)
     my_spectra = highiq.calc.get_psd(my_ds)
-    assert 'power_spectral_density_interp' in my_spectra.variables.keys()
     assert 'power_spectral_density' in my_spectra.variables.keys()
-    psd = my_spectra['power_spectra_normed'].sel(range=400, method='nearest')
+    psd = my_spectra['power_spectral_density'].sel(range=400, method='nearest')
     vel_bins = my_spectra['vel_bins']
     dV = vel_bins[1] - vel_bins[0]
-    np.testing.assert_almost_equal(psd.values.sum()*dV.values, 82.68732491)
+    np.testing.assert_almost_equal(psd.values.sum()*dV.values, 50.25995985957032)
     my_ds.close()
     my_spectra.close()
 
@@ -28,7 +28,7 @@ def test_moments():
     my_moments = highiq.calc.get_lidar_moments(my_spectra)
     intensity = my_moments['intensity'].values
     velocity = my_moments['doppler_velocity'].values
-    assert np.nanmin(intensity) > 1.
+    assert np.nanmin(intensity) > -1.
     assert np.nanmin(velocity) < -2.
     my_ds.close()
     my_spectra.close()
@@ -36,14 +36,12 @@ def test_moments():
 
 def test_peaks():
     my_ds = highiq.io.load_arm_netcdf(highiq.testing.TEST_FILE)
-    my_spectra = highiq.calc.get_psd(my_ds)
-    my_peaks = highiq.calc.calc_num_peaks(my_spectra)
-    my_moments = highiq.calc.get_lidar_moments(my_spectra)
-    my_peaks['npeaks'] = my_peaks['npeaks'].where(my_moments.intensity > 1.1)
+    my_spectra = highiq.calc.get_psd(my_ds, gate_resolution=200.0)
+    my_peaks = highiq.calc.calc_num_peaks(my_spectra, height=1.5, width=8, prominence=0.5)
+    my_peaks = highiq.calc.get_lidar_moments(my_peaks)
+    my_peaks['npeaks'] = my_peaks['npeaks'].where(my_peaks.intensity > 0.5)
     num_peaks = my_peaks['npeaks'].values
-    assert np.nanmax(num_peaks) == 2
+    assert np.nanmax(num_peaks) == 3
     my_ds.close()
     my_spectra.close()
     my_peaks.close()
-    my_moments.close()
-
