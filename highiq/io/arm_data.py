@@ -40,7 +40,8 @@ def load_arm_netcdf(arm_file, **kwargs):
     ds = act.io.armfiles.read_netcdf(arm_file, **kwargs)
     if 'time' not in ds['acf'].dims:
         ds['acf'] = ds['acf'].expand_dims('time')
-
+    if 'time' not in ds['acf_bkg'].dims:
+        ds['acf_bkg'] = ds['acf_bkg'].expand_dims('time')
     return ds
 
 

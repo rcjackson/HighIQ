@@ -5,7 +5,7 @@ import xarray as xr
 
 def _gpu_calc_power(psd, dV, block_size=200, normed=True):
     shp = psd.shape
-    times = shp[0]
+    
     power = np.zeros((shp[0], shp[1]))
     if len(shp) == 3:
         gpu_array = tf.constant(psd, dtype=tf.float32)
@@ -60,15 +60,6 @@ def _gpu_calc_spectral_width(psd, power, vel_bins, velocity, dV):
                             (vel_bins_tiled - velocity_array)**2 * gpu_array, axis=2))
     specwidth = gpu_array.numpy()
     return specwidth
-
-
-def _gpu_snr(power, noise):
-    shp = power.shape
-    power_array = tf.constant(power, dtype=tf.float32)
-    gpu_noise = tf.constant(noise, dtype=tf.float32)
-    power_array = 10. * (tf.math.log(power_array / gpu_noise) / tf.math.log(10.))
-    snr = power_array.numpy()
-    return snr
 
 
 def _gpu_calc_skewness(psd, power, vel_bins, velocity, spec_width, dV):
@@ -129,6 +120,9 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
     spectra: ACT Dataset
         The database with the Doppler lidar moments.
     """
+    if 'power_spectral_density' not in spectra.variables.keys():
+        raise ValueError("You must calculate the power spectra " + 
+                         "before calculating moments!")
     if which_moments is None:
         which_moments = ['snr', 'doppler_velocity', 'spectral_width',
                          'skewness', 'kurtosis']
@@ -151,22 +145,16 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
             spectra['vel_bins'].values, dV)
     
     if 'snr' in which_moments:
-        power_with_noise = _gpu_calc_power(
-            spectra['power_spectral_density'].values, dV,
-            normed=True)
-        power_with_noise = xr.DataArray(power_with_noise, dims=('time', 'range'))
-        spectra['snr'] = xr.DataArray(
-            _gpu_snr(power_with_noise.values, 
-                np.ones_like(power_with_noise) * nyquist_range),
-            dims=('time', 'range'))
+        power_with_noise = dV * spectra['power_spectral_density'].sum(dim='vel_bins')
+        spectra['snr'] = power_with_noise / (dV * len(spectra['vel_bins']))
         spectra['snr'].attrs['long_name'] = "Signal to Noise Ratio"
-        spectra['snr'].attrs['units'] = "dB"
-        spectra['intensity'] = spectra['snr'] + 1.
-        spectra['intensity'].attrs['long_name'] = "Intensity (SNR + 1)"
-        spectra['intensity'].attrs['units'] = "dB"
+        spectra['snr'].attrs['units'] = ""
+        spectra['intensity'] = spectra['snr'] - 1.
+        spectra['intensity'].attrs['long_name'] = "Intensity (SNR - 1)"
+        spectra['intensity'].attrs['units'] = ""
         spectra['intensity'] = \
             spectra['intensity'].where(spectra.snr > snr_thresh)
-        spectra.attrs['snr_mask'] = "%f dB" % snr_thresh
+        spectra.attrs['snr_mask'] = "%f" % snr_thresh
 
     if 'doppler_velocity' in which_moments:
         velocity_dumb = _gpu_calc_velocity_dumb(

@@ -28,7 +28,7 @@ def _fast_expand(complex_array, factor, num_per_block=200):
         expanded_array[:, :, factor * l:factor * (l + 1)] = temp_array.numpy()
     return expanded_array
 
-def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024,
+def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, time_window=None,
             acf_name='acf', acf_bkg_name='acf_bkg', block_size_ratio=1.0):
     """
     This function will get the power spectral density from the autocorrelation function.
@@ -50,6 +50,8 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024,
         with the magnitude and units of the sample rate.
     nfft: int
         The number of points to include in the FFT.
+    time_window: int
+        The number of time points to include in the rolling window.
     acf_name: str
         The name of the autocorrelation function field.
     acf_bkg_name: str
@@ -81,18 +83,25 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024,
         fs_pint = Q_(spectra.attrs["wavelength"])
         fs_pint = fs_pint.to("m")
         wavelength = fs_pint.magnitude
-
+    
+    if time_window is not None:
+        spectra = spectra.resample(time='%ds' % int(time_window)).mean()
+    else:
+        spectra[acf_bkg_name] = xr.DataArray(np.ones(spectra[acf_name].shape),
+                                            dims=spectra[acf_name].dims) * spectra[acf_bkg_name]
 
     num_gates = int(gate_resolution / 3)
     complex_coeff_in = spectra[acf_name].isel(complex=0).values +\
                        spectra[acf_name].isel(complex=1).values * 1j
-    num_lags = complex_coeff_in.shape[1]
+    
     complex_coeff = np.zeros(
             (complex_coeff_in.shape[0], int(complex_coeff_in.shape[1] / num_gates),
                 complex_coeff_in.shape[2]), dtype=np.complex128)
     for i in range(complex_coeff.shape[1]):
-        complex_coeff[:, i, :] = np.sum(complex_coeff_in[
+        complex_coeff[:, i, :] = np.mean(complex_coeff_in[
                 :, (num_gates * i):(num_gates * i+1), :], axis=1)
+ 
+  
     del complex_coeff_in
     
     ntimes = complex_coeff.shape[0]
@@ -113,39 +122,36 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024,
                         spectra[acf_bkg_name].isel(complex=1).values * 1j)
 
     complex_coeff_bkg = np.zeros(
-            (int(complex_coeff_bkg_in.shape[0] / num_gates), complex_coeff_bkg_in.shape[1]),
-            dtype=np.complex128)
-    for i in range(complex_coeff_bkg.shape[0]):
-        complex_coeff_bkg[i, :] = np.sum(complex_coeff_bkg_in[
-                (num_gates * i):(num_gates * i+1), :], axis=0)
-
-    frames = tf.signal.frame(complex_coeff,
-                             frame_length=int(nfft),
-                             frame_step=int(nfft), pad_end=True)
-    multiples = (frames.shape[0], frames.shape[1], frames.shape[2], 1)
+            (complex_coeff_bkg_in.shape[0], int(complex_coeff_bkg_in.shape[1] / num_gates),
+                complex_coeff_bkg_in.shape[2]), dtype=np.complex128)
+    for i in range(complex_coeff.shape[1]):
+        complex_coeff_bkg[:, i, :] = np.mean(complex_coeff_bkg_in[:,
+                (num_gates * i):(num_gates * i+1), :], axis=1)
+    num_lags = complex_coeff_bkg_in.shape[2]
+    if nfft < num_lags:
+        raise RuntimeError("Number of points in FFT < number of lags in sample!")
+    pad_after = int((nfft - num_lags))
+    pad_before = 0
+    pad_lengths = tf.constant([[0, 0], [0, 0], [pad_before, pad_after]])
+    frames = tf.pad(complex_coeff, pad_lengths, mode='CONSTANT', constant_values=0)
+   
     power = np.abs(tf.signal.fft(frames).numpy())
-    power = power.mean(axis=2)
     attrs_dict = {'long_name': 'Range', 'units': 'm'}
     spectra['range'] = xr.DataArray(
         gate_resolution * np.arange(int(frames.shape[1])),
         dims=('range'), attrs=attrs_dict)
     spectra['power'] = xr.DataArray(
         power[:, :, inds_sorted], dims=(('time', 'range', 'vel_bins')))
-    frames = tf.signal.frame(complex_coeff_bkg, frame_length=int(nfft),
-                             frame_step=int(nfft), pad_end=True)
-    multiples = (frames.shape[0], frames.shape[1],  1)
+    frames = tf.pad(complex_coeff_bkg, pad_lengths, mode='CONSTANT', constant_values=0)
+    
     power = np.abs(tf.signal.fft(frames).numpy())
-    power = power.mean(axis=1)
+   
     spectra['power_bkg'] = xr.DataArray(
-        power[:, inds_sorted], dims=('range', 'vel_bins'))
+        power[:, :, inds_sorted], dims=('time', 'range', 'vel_bins'))
 
     # Subtract background noise
-    spectra['power_spectral_density'] = spectra['power'] / \
-                                        np.tile(spectra['power_bkg'], (ntimes, 1, 1))
-    spectra['power_spectral_density'] = spectra['power_spectral_density'].where(
-        spectra['power_spectral_density'] > 0, 0)
+    spectra['power_spectral_density'] = spectra['power'] / spectra['power_bkg']
     spectra['power_spectral_density'].attrs["long_name"] = "Power spectral density"
-
     spectra['power_spectral_density'].attrs["units"] = ''
 
 
@@ -179,23 +185,41 @@ def calc_num_peaks(my_spectra, **kwargs):
     my_array = spectra.fillna(0).values
     shp = my_array.shape
     num_peaks = np.zeros((shp[0], shp[1]))
+    peak_loc = np.nan * np.ones((shp[0], shp[1], 5))
+    
+    vel_bins = my_spectra['vel_bins'].values
 
-    if not 'height' in kwargs.keys():
-        height = 3
+    if not 'prominence' in kwargs.keys():
+        prominence = 0.01
     else:
-        height = kwargs.pop('height')
+        prominence = kwargs.pop('prominence')
 
     if not 'width' in kwargs.keys():
         width = 8
     else:
-        width = kwargs.pop('height')
+        width = kwargs.pop('width')
 
+    if not 'height' in kwargs.keys():
+        height = 1.5
+    else:
+        height = kwargs.pop('height')
+        
     for i in range(shp[0]):
         for j in range(shp[1]):
-            num_peaks[i, j] = len(
-                find_peaks(my_array[i,j], height=height, width=width, **kwargs)[0])
+            max_spec = spectra[i, j].max()
+            peaks = find_peaks(my_array[i, j], prominence=prominence, width=width, **kwargs)[0]
+            num_peaks[i, j] = len(peaks)
+            for k in range(len(peaks)):
+                if k > 4:
+                    continue
+                peak_loc[i, j, k] = vel_bins[peaks[k]]
+
+
     my_spectra['npeaks'] = xr.DataArray(num_peaks, dims=('time', 'range'))
     my_spectra['npeaks'].attrs['long_name'] = "Number of peaks in Doppler spectra"
     my_spectra['npeaks'].attrs['units'] = "1"
 
+    my_spectra['peak_velocities'] =  xr.DataArray(peak_loc, dims=('time', 'range', 'peak_no'))
+    my_spectra['peak_velocities'].attrs['long_name'] = "Dopper velocity peaks"
+    my_spectra['peak_velocities'].attrs['units'] = 'm s-1'
     return my_spectra
