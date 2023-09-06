@@ -13,7 +13,7 @@
 # import os
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
-
+import sphinx_theme
 
 # -- Project information -----------------------------------------------------
 
@@ -46,7 +46,7 @@ sphinx_gallery_conf = {
     'gallery_dirs': 'source/auto_examples'
 }
 
-#Add any paths that contain templates here, relative to this directory.
+# Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
 # List of patterns, relative to source directory, that match files and
@@ -67,7 +67,7 @@ html_theme = 'alabaster'
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 html_theme = 'neo_rtd_theme'
-import sphinx_theme
+
 html_theme_path = [sphinx_theme.get_html_theme_path()]
 
 # Numpy autodoc attributes
