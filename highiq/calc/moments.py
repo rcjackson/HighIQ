@@ -89,7 +89,7 @@ def _gpu_calc_kurtosis(psd, power, vel_bins, velocity, spec_width, dV):
     return kurtosis
 
 
-def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments=None):
+def get_lidar_moments(spectra, intensity_thresh=0, block_size_ratio=1.0, which_moments=None):
     """
     This function will retrieve the lidar moments of the Doppler spectra.
 
@@ -97,7 +97,7 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
     ----------
     spectra: ACT Dataset
         The dataset containing the processed Doppler spectral density functions.
-    snr_thresh: float
+    intensity_thresh: float
         The minimum signal to noise ratio to use as an initial mask of noise.
     block_size_ratio: float
         This value is used to determine how much data the GPU will process in one loop. If your
@@ -117,7 +117,7 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
     if 'power_spectral_density' not in spectra.variables.keys():
         raise ValueError("You must calculate the power spectra before calculating moments!")
     if which_moments is None:
-        which_moments = ['snr', 'doppler_velocity', 'spectral_width',
+        which_moments = ['intensity', 'doppler_velocity', 'spectral_width',
                          'skewness', 'kurtosis']
     else:
         which_moments = [x.lower() for x in which_moments]
@@ -132,17 +132,12 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
         linear_psd_0filled, dV)
     velocity = _gpu_calc_velocity(linear_psd_0filled, power, spectra['vel_bins'].values, dV)
 
-    if 'snr' in which_moments:
+    if 'intensity' in which_moments:
         power_with_noise = dV * spectra['power_spectral_density'].sum(dim='vel_bins')
-        spectra['snr'] = power_with_noise / (dV * len(spectra['vel_bins']))
-        spectra['snr'].attrs['long_name'] = "Signal to Noise Ratio"
-        spectra['snr'].attrs['units'] = ""
-        spectra['intensity'] = spectra['snr'] - 1.
-        spectra['intensity'].attrs['long_name'] = "Intensity (SNR - 1)"
+        spectra['intensity'] = power_with_noise / (dV * len(spectra['vel_bins']))
+        spectra['intensity'].attrs['long_name'] = "Signal to Noise Ratio + 1"
         spectra['intensity'].attrs['units'] = ""
-        spectra['intensity'] = \
-            spectra['intensity'].where(spectra.snr > snr_thresh)
-        spectra.attrs['snr_mask'] = "%f" % snr_thresh
+        spectra.attrs['intensity_mask'] = "%f" % intensity_thresh
 
     if 'doppler_velocity' in which_moments:
         velocity_dumb = _gpu_calc_velocity_dumb(
@@ -159,9 +154,9 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
             "Doppler velocity using first moment"
         spectra['doppler_velocity'].attrs['units'] = "m s-1"
         spectra['doppler_velocity_max_peak'] = \
-            spectra['doppler_velocity_max_peak'].where(spectra.snr > snr_thresh)
+            spectra['doppler_velocity_max_peak'].where(spectra.intensity > intensity_thresh)
         spectra['doppler_velocity'] = spectra['doppler_velocity'].where(
-            spectra.snr > snr_thresh)
+            spectra.intensity > intensity_thresh)
 
     if 'spectral_width' in which_moments or 'kurtosis' in which_moments or 'skewness' in which_moments:
         spectral_width = _gpu_calc_spectral_width(
@@ -173,15 +168,15 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
             spectral_width, dims=('time', 'range'))
         spectra['spectral_width'].attrs["long_name"] = "Spectral width"
         spectra['spectral_width'].attrs["units"] = "m s-1"
-        if 'snr' in which_moments:
-            spectra['spectral_width'] = spectra['spectral_width'].where(spectra.snr > snr_thresh)
+        if 'intensity' in which_moments:
+            spectra['spectral_width'] = spectra['spectral_width'].where(spectra.intensity > intensity_thresh)
 
     if 'skewness' in which_moments:
         skewness = _gpu_calc_skewness(
             linear_psd, power, spectra['vel_bins'].values, velocity, spectral_width, dV)
         spectra['skewness'] = xr.DataArray(skewness, dims=('time', 'range'))
-        if 'snr' in which_moments:
-            spectra['skewness'] = spectra['skewness'].where(spectra.snr > snr_thresh)
+        if 'intensity' in which_moments:
+            spectra['skewness'] = spectra['skewness'].where(spectra.intensity > intensity_thresh)
         spectra['skewness'].attrs["long_name"] = "Skewness"
         spectra['skewness'].attrs["units"] = "m^3 s^-3"
 
@@ -189,8 +184,8 @@ def get_lidar_moments(spectra, snr_thresh=0, block_size_ratio=1.0, which_moments
         kurtosis = _gpu_calc_kurtosis(
             linear_psd, power, spectra['vel_bins'].values, velocity, spectral_width, dV)
         spectra['kurtosis'] = xr.DataArray(kurtosis, dims=('time', 'range'))
-        if 'snr' in which_moments:
-            spectra['kurtosis'] = spectra['kurtosis'].where(spectra.snr > snr_thresh)
+        if 'intensity' in which_moments:
+            spectra['kurtosis'] = spectra['kurtosis'].where(spectra.intensity > intensity_thresh)
         spectra['kurtosis'].attrs["long_name"] = "Kurtosis"
         spectra['kurtosis'].attrs["units"] = "m^4 s^-4"
 
