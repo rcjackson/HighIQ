@@ -17,7 +17,7 @@ def test_spectra():
     psd = my_spectra['power_spectral_density'].sel(range=400, method='nearest')
     vel_bins = my_spectra['vel_bins']
     dV = vel_bins[1] - vel_bins[0]
-    np.testing.assert_almost_equal(psd.values.sum() * dV.values, 50.25995985957032)
+    np.testing.assert_almost_equal(psd.values.sum() * dV.values, 48.64498536586853)
     my_ds.close()
     my_spectra.close()
 

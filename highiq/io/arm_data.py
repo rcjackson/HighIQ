@@ -18,21 +18,21 @@ def load_arm_netcdf(arm_file, **kwargs):
     """
 
     This loads netCDF data that are in the Atmospheric Radiation Measurement standard netCDF format.
-    This is a wrapper around :func:`act.io.armfiles.read_netcdf`
+    This is a wrapper around :func:`act.io.read_netcdf`
 
     Parameters
     ----------
     arm_file: str
         The path to the dataset to load.
 
-    Additional keyword arguments are passed into :func:`act.io.armfiles.read_netcdf`
+    Additional keyword arguments are passed into :func:`act.io.read_netcdf`
 
     Returns
     -------
     ds: ACT Dataset
         Returns the ACT dataset (xarray dataset) that contains the autocorrelation functions.
     """
-    ds = act.io.armfiles.read_netcdf(arm_file, **kwargs)
+    ds = act.io.arm.read_arm_netcdf(arm_file, **kwargs)
     if 'time' not in ds['acf'].dims:
         ds['acf'] = ds['acf'].expand_dims('time')
     if 'time' not in ds['acf_bkg'].dims:

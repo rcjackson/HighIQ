@@ -1,8 +1,8 @@
 import numpy as np
-import tensorflow as tf
+import jax.numpy as jnp
 import xarray as xr
 
-from scipy.signal import hann, find_peaks
+from scipy.signal import find_peaks
 from scipy.ndimage import convolve1d
 from pint import UnitRegistry
 
@@ -12,24 +12,25 @@ def _fast_expand(complex_array, factor, num_per_block=200):
     expanded_array = np.zeros((shp[0], shp[1], shp[2] * factor))
     weights = np.tile(np.arange(0, factor) / factor, (shp[0], shp[1], 1))
     for i in range(shp[2]):
-        gpu_array = tf.constant(complex_array[:, :, i], dtype=tf.float32)
+        gpu_array = jnp.zeros(complex_array[:, :, i], dtype=jnp.float32)
         if i < shp[2] - 1:
-            gpu_array2 = tf.constant(complex_array[:, :, i + 1], dtype=tf.float32)
+            gpu_array2 = jnp.zeros(complex_array[:, :, i + 1], dtype=jnp.float32)
             diff_array = gpu_array2 - gpu_array
         else:
-            diff_array = tf.zeros((shp[0], shp[1]))
+            diff_array = jnp.zeros((shp[0], shp[1]))
 
-        rep_array = tf.transpose(
-            np.tile(gpu_array, (factor, 1, 1)), [1, 2, 0])
-        diff_array = tf.transpose(
-            np.tile(diff_array, (factor, 1, 1)), [1, 2, 0])
+        rep_array = jnp.transpose(
+            jnp.tile(gpu_array, (factor, 1, 1)), [1, 2, 0])
+        diff_array = jnp.transpose(
+            jnp.tile(diff_array, (factor, 1, 1)), [1, 2, 0])
         temp_array = diff_array * weights + rep_array
-        expanded_array[:, :, factor * i:factor * (i + 1)] = temp_array.numpy()
+        expanded_array[:, :, factor * i:factor * (i + 1)] = np.array(temp_array)
     return expanded_array
 
 
 def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, time_window=None,
-            acf_name='acf', acf_bkg_name='acf_bkg', block_size_ratio=1.0):
+            acf_name='acf', acf_bkg_name='acf_bkg', block_size_ratio=1.0,
+            smooth_window=5):
     """
     This function will get the power spectral density from the autocorrelation function.
 
@@ -59,6 +60,9 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
     block_size_ratio: float
         Increase this value to use more GPU memory for processing. Doing this can
         poentially optimize processing.
+    smooth_window: int
+        Apply running average to power spectra to remove small scale noise using
+        this window size.
 
     Returns
     -------
@@ -96,7 +100,7 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
         (complex_coeff_in.shape[0], int(complex_coeff_in.shape[1] / num_gates),
             complex_coeff_in.shape[2]), dtype=np.complex128)
     for i in range(complex_coeff.shape[1]):
-        complex_coeff[:, i, :] = np.mean(complex_coeff_in[:, (num_gates * i):(num_gates * i + 1), :], axis=1)
+        complex_coeff[:, i, :] = np.sum(complex_coeff_in[:, (num_gates * i):(num_gates * i + 1), :], axis=1)
     del complex_coeff_in
     freq = np.fft.fftfreq(nfft) * fs
     spectra.attrs['nyquist_velocity'] = "%f m s-1" % (wavelength / (4 * 1 / fs))
@@ -116,30 +120,35 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
         (complex_coeff_bkg_in.shape[0], int(complex_coeff_bkg_in.shape[1] / num_gates),
             complex_coeff_bkg_in.shape[2]), dtype=np.complex128)
     for i in range(complex_coeff.shape[1]):
-        complex_coeff_bkg[:, i, :] = np.mean(complex_coeff_bkg_in[:, (num_gates * i):(num_gates * i + 1), :], axis=1)
+        complex_coeff_bkg[:, i, :] = np.sum(complex_coeff_bkg_in[:, (num_gates * i):(num_gates * i + 1), :], axis=1)
     num_lags = complex_coeff_bkg_in.shape[2]
     if nfft < num_lags:
         raise RuntimeError("Number of points in FFT < number of lags in sample!")
     pad_after = int((nfft - num_lags))
     pad_before = 0
-    pad_lengths = tf.constant([[0, 0], [0, 0], [pad_before, pad_after]])
-    frames = tf.pad(complex_coeff, pad_lengths, mode='CONSTANT', constant_values=0)
-
-    power = np.abs(tf.signal.fft(frames).numpy())
+    pad_lengths = [(0, 0), (0, 0), (pad_before, pad_after)]
+    frames = jnp.pad(complex_coeff, pad_lengths, mode='constant', constant_values=0)
+    window = 1 / smooth_window * np.ones(smooth_window) 
+    power = convolve1d(np.abs(jnp.fft.fft(frames)),
+        axis=2, weights=window)
     attrs_dict = {'long_name': 'Range', 'units': 'm'}
     spectra['range'] = xr.DataArray(
         gate_resolution * np.arange(int(frames.shape[1])),
         dims=('range'), attrs=attrs_dict)
     spectra['power'] = xr.DataArray(
         power[:, :, inds_sorted], dims=(('time', 'range', 'vel_bins')))
-    frames = tf.pad(complex_coeff_bkg, pad_lengths, mode='CONSTANT', constant_values=0)
-    power = np.abs(tf.signal.fft(frames).numpy())
+    frames = jnp.pad(complex_coeff_bkg, pad_lengths, mode='constant', constant_values=0)
+    power = convolve1d(np.abs(jnp.fft.fft(frames)),
+        axis=2, weights=window)
 
     spectra['power_bkg'] = xr.DataArray(
         power[:, :, inds_sorted], dims=('time', 'range', 'vel_bins'))
 
     # Subtract background noise
     spectra['power_spectral_density'] = spectra['power'] / spectra['power_bkg']
+
+    # Ground noise floor to 1
+    spectra['power_spectral_density'] = spectra['power_spectral_density'] - spectra['power_spectral_density'].min(axis=2) + 1
     spectra['power_spectral_density'].attrs["long_name"] = "Power spectral density"
     spectra['power_spectral_density'].attrs["units"] = ''
     spectra['range'].attrs['long_name'] = "Range"
