@@ -1,5 +1,5 @@
 import numpy as np
-import tensorflow as tf
+import jax.numpy as jnp
 import xarray as xr
 
 from scipy.signal import hann, find_peaks
@@ -12,19 +12,19 @@ def _fast_expand(complex_array, factor, num_per_block=200):
     expanded_array = np.zeros((shp[0], shp[1], shp[2] * factor))
     weights = np.tile(np.arange(0, factor) / factor, (shp[0], shp[1], 1))
     for i in range(shp[2]):
-        gpu_array = tf.constant(complex_array[:, :, i], dtype=tf.float32)
+        gpu_array = jnp.zeros(complex_array[:, :, i], dtype=jnp.float32)
         if i < shp[2] - 1:
-            gpu_array2 = tf.constant(complex_array[:, :, i + 1], dtype=tf.float32)
+            gpu_array2 = jnp.zeros(complex_array[:, :, i + 1], dtype=jnp.float32)
             diff_array = gpu_array2 - gpu_array
         else:
-            diff_array = tf.zeros((shp[0], shp[1]))
+            diff_array = jnp.zeros((shp[0], shp[1]))
 
-        rep_array = tf.transpose(
-            np.tile(gpu_array, (factor, 1, 1)), [1, 2, 0])
-        diff_array = tf.transpose(
-            np.tile(diff_array, (factor, 1, 1)), [1, 2, 0])
+        rep_array = jnp.transpose(
+            jnp.tile(gpu_array, (factor, 1, 1)), [1, 2, 0])
+        diff_array = jnp.transpose(
+            jnp.tile(diff_array, (factor, 1, 1)), [1, 2, 0])
         temp_array = diff_array * weights + rep_array
-        expanded_array[:, :, factor * i:factor * (i + 1)] = temp_array.numpy()
+        expanded_array[:, :, factor * i:factor * (i + 1)] = np.array(temp_array)
     return expanded_array
 
 
@@ -126,10 +126,10 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
         raise RuntimeError("Number of points in FFT < number of lags in sample!")
     pad_after = int((nfft - num_lags))
     pad_before = 0
-    pad_lengths = tf.constant([[0, 0], [0, 0], [pad_before, pad_after]])
-    frames = tf.pad(complex_coeff, pad_lengths, mode='CONSTANT', constant_values=0)
+    pad_lengths = [(0, 0), (0, 0), (pad_before, pad_after)]
+    frames = jnp.pad(complex_coeff, pad_lengths, mode='constant', constant_values=0)
     window = 1 / smooth_window * np.ones(smooth_window) 
-    power = convolve1d(np.abs(tf.signal.fft(frames).numpy()),
+    power = convolve1d(np.abs(jnp.fft.fft(frames)),
         axis=2, weights=window)
     attrs_dict = {'long_name': 'Range', 'units': 'm'}
     spectra['range'] = xr.DataArray(
@@ -137,8 +137,8 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
         dims=('range'), attrs=attrs_dict)
     spectra['power'] = xr.DataArray(
         power[:, :, inds_sorted], dims=(('time', 'range', 'vel_bins')))
-    frames = tf.pad(complex_coeff_bkg, pad_lengths, mode='CONSTANT', constant_values=0)
-    power = convolve1d(np.abs(tf.signal.fft(frames).numpy()),
+    frames = jnp.pad(complex_coeff_bkg, pad_lengths, mode='constant', constant_values=0)
+    power = convolve1d(np.abs(jnp.fft.fft(frames)),
         axis=2, weights=window)
 
     spectra['power_bkg'] = xr.DataArray(

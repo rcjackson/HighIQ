@@ -2,4 +2,4 @@ numpy
 scipy
 act-atmos
 pint
-tensorflow
+jax
