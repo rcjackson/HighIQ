@@ -1,5 +1,10 @@
 import numpy as np
-import jax.numpy as jnp
+import warnings
+try:
+    import jax.numpy as jnp
+except ImportError:
+    import numpy as jnp
+    warnings.warn("Jax not installed...reverting to Numpy!", Warning)
 import xarray as xr
 
 from scipy.signal import find_peaks
