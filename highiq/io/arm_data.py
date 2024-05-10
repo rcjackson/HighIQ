@@ -40,7 +40,7 @@ def load_arm_netcdf(arm_file, **kwargs):
     return ds
 
 
-def read_00_data(file_name, home_point, site='sgp.C1', **kwargs):
+def read_00_data(file_name, home_point, site='sgp.C1', sample_start=None, sample_end=None, **kwargs):
     """
     This reads a raw StreamLine Doppler Lidar .00 level file.
 
@@ -50,7 +50,10 @@ def read_00_data(file_name, home_point, site='sgp.C1', **kwargs):
         Name of .raw file to read
     home_point: str
         Name of home point file path.
-
+    sample_start: int
+        Start of time period to load
+    sample_end: int 
+        End of time periods to load
     kwargs
 
     Returns
@@ -78,6 +81,8 @@ def read_00_data(file_name, home_point, site='sgp.C1', **kwargs):
     background_bytes = 8 * background_vals
     beam_bytes = 24 + background_bytes
     dot_split = file_name.split(".")
+    if len(dot_split) < 3:
+        dot_split = dot_split[0].split("_")
     for x in dot_split:
         if len(x) == 8 and x.isnumeric():
             date_str = x
@@ -114,8 +119,11 @@ def read_00_data(file_name, home_point, site='sgp.C1', **kwargs):
     else:
         read_background = True
         total_sample_bytes = os.path.getsize(file_name) - background_bytes
-
-    nsamples = int(total_sample_bytes / beam_bytes)
+    
+    if sample_start == None:
+        nsamples = int(total_sample_bytes / beam_bytes)
+    else:
+        nsamples = sample_end - sample_start + 1
 
     if read_background:
         stringFmt = "<"
@@ -136,6 +144,10 @@ def read_00_data(file_name, home_point, site='sgp.C1', **kwargs):
         stringFmt += "d"
     previous_time = 0
     spill_over = 0.
+    if sample_start is not None:
+        num_bytes_to_skip = 24 + background_vals * 8
+        f.seek(num_bytes_to_skip, 1)
+
     for i in range(nsamples):
         data = f.read(8)
         azimuth[i] = float(struct.unpack("<d", data)[0]) + lidar_home_point
