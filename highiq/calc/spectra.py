@@ -2,7 +2,7 @@ import numpy as np
 import jax.numpy as jnp
 import xarray as xr
 
-from scipy.signal import hann, find_peaks
+from scipy.signal import find_peaks
 from scipy.ndimage import convolve1d
 from pint import UnitRegistry
 
