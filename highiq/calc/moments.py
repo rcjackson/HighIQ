@@ -1,9 +1,9 @@
 import numpy as np
 import warnings
 try:
-    import jax.numpy as cp
-except ImportError:
     import cupy as cp
+except ImportError:
+    import numpy as cp
     warnings.warn("Jax not installed...reverting to Numpy!", Warning)
 import xarray as xr
 
