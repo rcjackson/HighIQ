@@ -145,7 +145,7 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
         power = convolve1d(cp.abs(cp.fft.fft(frames)),
            axis=2, weights=window)
     else:
-        power = convolve1d(cp.abs(cp.fft.fft(frames)).asnumpy(),
+        power = convolve1d(cp.abs(cp.fft.fft(frames)).get(),
            axis=2, weights=window)
     if CUPY_AVAILABLE and CUPY_CONVOLVE:
         power = power.asnumpy()
@@ -161,7 +161,7 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
         power = convolve1d(cp.abs(cp.fft.fft(frames)),
            axis=2, weights=window)
     else:
-        power = convolve1d(cp.abs(cp.fft.fft(frames)).asnumpy(),
+        power = convolve1d(cp.abs(cp.fft.fft(frames)).get(),
            axis=2, weights=window)
 
     if CUPY_AVAILABLE and CUPY_CONVOLVE:
