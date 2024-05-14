@@ -132,7 +132,7 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
     pad_after = int((nfft - num_lags))
     pad_before = 0
     pad_lengths = [(0, 0), (0, 0), (pad_before, pad_after)]
-    frames = cp.pad(complex_coeff, pad_lengths, mode='constant', constant_values=0)
+    frames = cp.pad(complex_coeff, pad_lengths, mode='constant')
     window = 1 / smooth_window * np.ones(smooth_window) 
     power = convolve1d(np.abs(cp.fft.fft(frames)),
         axis=2, weights=window)
