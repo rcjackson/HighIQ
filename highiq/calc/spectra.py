@@ -2,13 +2,18 @@ import numpy as np
 import warnings
 try:
     import cupy as cp
+    CUPY_AVAILABLE = True
 except ImportError:
     import numpy as cp
+    CUPY_AVAILABLE = False
     warnings.warn("CuPy not installed...reverting to Numpy!", Warning)
 import xarray as xr
 
 from scipy.signal import find_peaks
-from scipy.ndimage import convolve1d
+try:
+    from cupy.scipy.ndimage import convolve1d
+except ImportError:
+    from scipy.ndimage import convolve1d
 from pint import UnitRegistry
 
 
@@ -132,20 +137,24 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
     pad_after = int((nfft - num_lags))
     pad_before = 0
     pad_lengths = [(0, 0), (0, 0), (pad_before, pad_after)]
-    frames = cp.pad(complex_coeff, pad_lengths, mode='constant')
+    frames = cp.pad(cp.asarray(complex_coeff), pad_lengths, mode='constant')
     window = 1 / smooth_window * np.ones(smooth_window) 
-    power = convolve1d(np.abs(cp.fft.fft(frames)),
+    power = convolve1d(cp.abs(cp.fft.fft(frames)),
         axis=2, weights=window)
+    if CUPY_AVAILABLE:
+        power = power.asnumpy()
+
     attrs_dict = {'long_name': 'Range', 'units': 'm'}
     spectra['range'] = xr.DataArray(
         gate_resolution * np.arange(int(frames.shape[1])),
         dims=('range'), attrs=attrs_dict)
     spectra['power'] = xr.DataArray(
         power[:, :, inds_sorted], dims=(('time', 'range', 'vel_bins')))
-    frames = cp.pad(complex_coeff_bkg, pad_lengths, mode='constant')
-    power = convolve1d(np.abs(cp.fft.fft(frames)),
+    frames = cp.pad(cp.asarray(complex_coeff_bkg), pad_lengths, mode='constant')
+    power = convolve1d(cp.abs(cp.fft.fft(frames)),
         axis=2, weights=window)
-
+    if CUPY_AVAILABLE:
+        power = power.asnumpy()    
     spectra['power_bkg'] = xr.DataArray(
         power[:, :, inds_sorted], dims=('time', 'range', 'vel_bins'))
 
