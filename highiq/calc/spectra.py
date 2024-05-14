@@ -142,7 +142,7 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
         dims=('range'), attrs=attrs_dict)
     spectra['power'] = xr.DataArray(
         power[:, :, inds_sorted], dims=(('time', 'range', 'vel_bins')))
-    frames = cp.pad(complex_coeff_bkg, pad_lengths, mode='constant', constant_values=0)
+    frames = cp.pad(complex_coeff_bkg, pad_lengths, mode='constant')
     power = convolve1d(np.abs(cp.fft.fft(frames)),
         axis=2, weights=window)
 
