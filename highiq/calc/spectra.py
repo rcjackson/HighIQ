@@ -1,10 +1,10 @@
 import numpy as np
 import warnings
 try:
-    import jax.numpy as jnp
+    import cupy as cp
 except ImportError:
-    import numpy as jnp
-    warnings.warn("Jax not installed...reverting to Numpy!", Warning)
+    import numpy as cp
+    warnings.warn("CuPy not installed...reverting to Numpy!", Warning)
 import xarray as xr
 
 from scipy.signal import find_peaks
@@ -17,17 +17,17 @@ def _fast_expand(complex_array, factor, num_per_block=200):
     expanded_array = np.zeros((shp[0], shp[1], shp[2] * factor))
     weights = np.tile(np.arange(0, factor) / factor, (shp[0], shp[1], 1))
     for i in range(shp[2]):
-        gpu_array = jnp.zeros(complex_array[:, :, i], dtype=jnp.float32)
+        gpu_array = cp.zeros(complex_array[:, :, i], dtype=cp.float32)
         if i < shp[2] - 1:
-            gpu_array2 = jnp.zeros(complex_array[:, :, i + 1], dtype=jnp.float32)
+            gpu_array2 = cp.zeros(complex_array[:, :, i + 1], dtype=cp.float32)
             diff_array = gpu_array2 - gpu_array
         else:
-            diff_array = jnp.zeros((shp[0], shp[1]))
+            diff_array = cp.zeros((shp[0], shp[1]))
 
-        rep_array = jnp.transpose(
-            jnp.tile(gpu_array, (factor, 1, 1)), [1, 2, 0])
-        diff_array = jnp.transpose(
-            jnp.tile(diff_array, (factor, 1, 1)), [1, 2, 0])
+        rep_array = cp.transpose(
+            cp.tile(gpu_array, (factor, 1, 1)), [1, 2, 0])
+        diff_array = cp.transpose(
+            cp.tile(diff_array, (factor, 1, 1)), [1, 2, 0])
         temp_array = diff_array * weights + rep_array
         expanded_array[:, :, factor * i:factor * (i + 1)] = np.array(temp_array)
     return expanded_array
@@ -132,9 +132,9 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
     pad_after = int((nfft - num_lags))
     pad_before = 0
     pad_lengths = [(0, 0), (0, 0), (pad_before, pad_after)]
-    frames = jnp.pad(complex_coeff, pad_lengths, mode='constant', constant_values=0)
+    frames = cp.pad(complex_coeff, pad_lengths, mode='constant', constant_values=0)
     window = 1 / smooth_window * np.ones(smooth_window) 
-    power = convolve1d(np.abs(jnp.fft.fft(frames)),
+    power = convolve1d(np.abs(cp.fft.fft(frames)),
         axis=2, weights=window)
     attrs_dict = {'long_name': 'Range', 'units': 'm'}
     spectra['range'] = xr.DataArray(
@@ -142,8 +142,8 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
         dims=('range'), attrs=attrs_dict)
     spectra['power'] = xr.DataArray(
         power[:, :, inds_sorted], dims=(('time', 'range', 'vel_bins')))
-    frames = jnp.pad(complex_coeff_bkg, pad_lengths, mode='constant', constant_values=0)
-    power = convolve1d(np.abs(jnp.fft.fft(frames)),
+    frames = cp.pad(complex_coeff_bkg, pad_lengths, mode='constant', constant_values=0)
+    power = convolve1d(np.abs(cp.fft.fft(frames)),
         axis=2, weights=window)
 
     spectra['power_bkg'] = xr.DataArray(

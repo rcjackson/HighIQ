@@ -1,6 +1,4 @@
 numpy
 scipy
-act-atmos
 pint
-jax
 xarray

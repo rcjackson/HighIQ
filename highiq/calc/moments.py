@@ -1,9 +1,9 @@
 import numpy as np
 import warnings
 try:
-    import jax.numpy as jnp
+    import jax.numpy as cp
 except ImportError:
-    import numpy as jnp
+    import cupy as cp
     warnings.warn("Jax not installed...reverting to Numpy!", Warning)
 import xarray as xr
 
@@ -12,16 +12,16 @@ def _gpu_calc_power(psd, dV, block_size=200, normed=True):
     shp = psd.shape
     power = np.zeros((shp[0], shp[1]))
     if len(shp) == 3:
-        gpu_array = jnp.array(psd, dtype=jnp.float32)
+        gpu_array = cp.array(psd, dtype=cp.float32)
         if normed:
             gpu_array = gpu_array * dV
-        gpu_array = jnp.sum(gpu_array, axis=2)
+        gpu_array = cp.sum(gpu_array, axis=2)
         power = np.array(gpu_array)
     else:
-        gpu_array = jnp.array(psd.values, dtype=jnp.float32)
+        gpu_array = cp.array(psd.values, dtype=cp.float32)
         if normed:
             gpu_array = gpu_array * dV
-        gpu_array = jnp.sum(gpu_array, axis=1)
+        gpu_array = cp.sum(gpu_array, axis=1)
         power = np.array(gpu_array)
 
     return power
@@ -29,10 +29,10 @@ def _gpu_calc_power(psd, dV, block_size=200, normed=True):
 
 def _gpu_calc_velocity(psd, power, vel_bins, dV):
     shp = psd.shape
-    gpu_array = jnp.array(psd, dtype=jnp.float32)
-    power_array = jnp.array(power, dtype=jnp.float32)
-    vel_bins_tiled = jnp.tile(vel_bins, (shp[0], shp[1], 1))
-    gpu_array = 1 / power_array * jnp.sum(gpu_array * vel_bins_tiled, axis=2)
+    gpu_array = cp.array(psd, dtype=cp.float32)
+    power_array = cp.array(power, dtype=cp.float32)
+    vel_bins_tiled = cp.tile(vel_bins, (shp[0], shp[1], 1))
+    gpu_array = 1 / power_array * cp.sum(gpu_array * vel_bins_tiled, axis=2)
     velocity = np.array(gpu_array)
     return velocity
 
@@ -40,9 +40,9 @@ def _gpu_calc_velocity(psd, power, vel_bins, dV):
 def _gpu_calc_velocity_dumb(psd, vel_bins):
     dV = np.diff(vel_bins)[0]
     vel_min = vel_bins.min()
-    gpu_array = jnp.array(psd)
-    gpu_array = jnp.argmax(gpu_array, axis=2)
-    gpu_array = vel_min + gpu_array.astype(jnp.float32) * dV
+    gpu_array = cp.array(psd)
+    gpu_array = cp.argmax(gpu_array, axis=2)
+    gpu_array = vel_min + gpu_array.astype(cp.float32) * dV
     velocity = np.array(gpu_array)
     return velocity
 
@@ -50,14 +50,14 @@ def _gpu_calc_velocity_dumb(psd, vel_bins):
 def _gpu_calc_spectral_width(psd, power, vel_bins, velocity, dV):
     shp = psd.shape
     times = shp[0]
-    specwidth = jnp.zeros((shp[0], shp[1]))
+    specwidth = cp.zeros((shp[0], shp[1]))
 
-    gpu_array = jnp.array(psd.values, dtype=jnp.float32)
-    power_array = jnp.array(power, dtype=jnp.float32)
+    gpu_array = cp.array(psd.values, dtype=cp.float32)
+    power_array = cp.array(power, dtype=cp.float32)
 
-    velocity_array = jnp.transpose(np.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
-    vel_bins_tiled = jnp.tile(vel_bins, (times, shp[1], 1))
-    gpu_array = jnp.sqrt(1 / power_array * jnp.sum(
+    velocity_array = cp.transpose(np.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
+    vel_bins_tiled = cp.tile(vel_bins, (times, shp[1], 1))
+    gpu_array = cp.sqrt(1 / power_array * cp.sum(
                              (vel_bins_tiled - velocity_array)**2 * gpu_array, axis=2))
     specwidth = np.array(gpu_array)
     return specwidth
@@ -66,14 +66,14 @@ def _gpu_calc_spectral_width(psd, power, vel_bins, velocity, dV):
 def _gpu_calc_skewness(psd, power, vel_bins, velocity, spec_width, dV):
     shp = psd.shape
     times = shp[0]
-    gpu_array = jnp.array(psd.values, dtype=jnp.float32)
-    power_array = jnp.array(power, dtype=jnp.float32)
-    spec_width_array = jnp.array(spec_width, dtype=jnp.float32)
+    gpu_array = cp.array(psd.values, dtype=cp.float32)
+    power_array = cp.array(power, dtype=cp.float32)
+    spec_width_array = cp.array(spec_width, dtype=cp.float32)
     power_array *= spec_width_array**3
 
-    velocity_array = jnp.transpose(np.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
-    vel_bins_tiled = jnp.tile(vel_bins, (times, shp[1], 1))
-    gpu_array = 1 / power_array * jnp.sum(
+    velocity_array = cp.transpose(np.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
+    vel_bins_tiled = cp.tile(vel_bins, (times, shp[1], 1))
+    gpu_array = 1 / power_array * cp.sum(
         (vel_bins_tiled - velocity_array)**3 * gpu_array, axis=2)
     skewness = np.array(gpu_array)
     return skewness
@@ -82,13 +82,13 @@ def _gpu_calc_skewness(psd, power, vel_bins, velocity, spec_width, dV):
 def _gpu_calc_kurtosis(psd, power, vel_bins, velocity, spec_width, dV):
     shp = psd.shape
     kurtosis = np.zeros((shp[0], shp[1]))
-    gpu_array = jnp.array(psd.values, dtype=jnp.float32)
-    power_array = jnp.array(power, dtype=jnp.float32)
-    spec_width_array = jnp.array(spec_width, dtype=jnp.float32)
+    gpu_array = cp.array(psd.values, dtype=cp.float32)
+    power_array = cp.array(power, dtype=cp.float32)
+    spec_width_array = cp.array(spec_width, dtype=cp.float32)
     power_array *= spec_width_array**4
-    velocity_array = jnp.transpose(jnp.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
-    vel_bins_tiled = jnp.tile(vel_bins, (shp[0], shp[1], 1))
-    gpu_array = 1 / power_array * jnp.sum(
+    velocity_array = cp.transpose(cp.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
+    vel_bins_tiled = cp.tile(vel_bins, (shp[0], shp[1], 1))
+    gpu_array = 1 / power_array * cp.sum(
         (vel_bins_tiled - velocity_array)**4 * gpu_array, axis=2)
     kurtosis = np.array(gpu_array)
     return kurtosis
