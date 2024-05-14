@@ -19,7 +19,7 @@ def _gpu_calc_power(psd, dV, block_size=200, normed=True):
             gpu_array = gpu_array * dV
         gpu_array = cp.sum(gpu_array, axis=2)
         if CUPY_AVAILABLE:
-            power = gpu_array.asnumpy()
+            power = gpu_array.get()
         else:
             power = gpu_array
     else:
@@ -28,7 +28,7 @@ def _gpu_calc_power(psd, dV, block_size=200, normed=True):
             gpu_array = gpu_array * dV
         gpu_array = cp.sum(gpu_array, axis=1)
         if CUPY_AVAILABLE:
-            power = gpu_array.asnumpy()
+            power = gpu_array.get()
         else:
             power = gpu_array
     return power
@@ -41,7 +41,7 @@ def _gpu_calc_velocity(psd, power, vel_bins, dV):
     vel_bins_tiled = cp.tile(vel_bins, (shp[0], shp[1], 1))
     gpu_array = 1 / power_array * cp.sum(gpu_array * vel_bins_tiled, axis=2)
     if CUPY_AVAILABLE:
-        velocity = gpu_array.asnumpy()
+        velocity = gpu_array.get()
     else:
         velocity = gpu_array
     return velocity
@@ -54,7 +54,7 @@ def _gpu_calc_velocity_dumb(psd, vel_bins):
     gpu_array = cp.argmax(gpu_array, axis=2)
     gpu_array = vel_min + gpu_array.astype(cp.float32) * dV
     if CUPY_AVAILABLE:
-        velocity = gpu_array.asnumpy()
+        velocity = gpu_array.get()
     else:
         velocity = gpu_array
     return velocity
@@ -73,7 +73,7 @@ def _gpu_calc_spectral_width(psd, power, vel_bins, velocity, dV):
     gpu_array = cp.sqrt(1 / power_array * cp.sum(
                              (vel_bins_tiled - velocity_array)**2 * gpu_array, axis=2))
     if CUPY_AVAILABLE:
-        specwidth = gpu_array.asnumpy()
+        specwidth = gpu_array.get()
     else:
         specwidth = gpu_array
     return specwidth
@@ -92,7 +92,7 @@ def _gpu_calc_skewness(psd, power, vel_bins, velocity, spec_width, dV):
     gpu_array = 1 / power_array * cp.sum(
         (vel_bins_tiled - velocity_array)**3 * gpu_array, axis=2)
     if CUPY_AVAILABLE:
-        skewness = gpu_array.asnumpy()
+        skewness = gpu_array.get()
     else:
         skewness = gpu_array
     return skewness
@@ -110,7 +110,7 @@ def _gpu_calc_kurtosis(psd, power, vel_bins, velocity, spec_width, dV):
     gpu_array = 1 / power_array * cp.sum(
         (vel_bins_tiled - velocity_array)**4 * gpu_array, axis=2)
     if CUPY_AVAILABLE:
-        kurtosis = gpu_array.asnumpy()
+        kurtosis = gpu_array.get()
     else:
         kurtosis = gpu_array
     return kurtosis
