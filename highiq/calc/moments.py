@@ -68,7 +68,7 @@ def _gpu_calc_spectral_width(psd, power, vel_bins, velocity, dV):
     gpu_array = cp.array(psd.values, dtype=cp.float32)
     power_array = cp.array(power, dtype=cp.float32)
 
-    velocity_array = cp.transpose(np.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
+    velocity_array = cp.transpose(cp.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
     vel_bins_tiled = cp.tile(vel_bins, (times, shp[1], 1))
     gpu_array = cp.sqrt(1 / power_array * cp.sum(
                              (vel_bins_tiled - velocity_array)**2 * gpu_array, axis=2))

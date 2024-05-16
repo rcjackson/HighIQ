@@ -49,9 +49,9 @@ def read_00_data(file_name, home_point, site='sgp.C1', sample_start=None, sample
     home_point: str
         Name of home point file path.
     sample_start: int
-        Start of time period to load
+        Start of time period to load (beam index)
     sample_end: int 
-        End of time periods to load
+        End of time periods to load (beam index)
     kwargs
 
     Returns
@@ -143,7 +143,7 @@ def read_00_data(file_name, home_point, site='sgp.C1', sample_start=None, sample
     previous_time = 0
     spill_over = 0.
     if sample_start is not None:
-        num_bytes_to_skip = 24 + background_vals * 8
+        num_bytes_to_skip = beam_bytes * sample_start
         f.seek(num_bytes_to_skip, 1)
 
     for i in range(nsamples):
