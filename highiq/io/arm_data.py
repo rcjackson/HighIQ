@@ -177,18 +177,18 @@ def read_00_data(file_name, home_point, site='sgp.C1', sample_start=None, sample
             acf_temp = np.transpose(acf_temp, [1, 0, 2])
             acf[i] = acf_temp
 
-        azimuth = xr.DataArray(azimuth, dims=('time'))
+        azimuth = xr.DataArray(azimuth.astype(np.float32), dims=('time'))
         azimuth.attrs["long_name"] = "Azimuth angle"
         azimuth.attrs["units"] = "Degree"
-        elevation = xr.DataArray(elevation, dims=('time'))
+        elevation = xr.DataArray(elevation.astype(np.float32), dims=('time'))
         elevation.attrs["units"] = "Degree"
         elevation.attrs["long_name"] = "Elevation angle"
         timestamp = np.array([datetime.fromtimestamp(x) for x in timestamp])
         timestamp = xr.DataArray(timestamp, dims=('time'))
 
-        acf_bkg = xr.DataArray(acf_bkg, dims=('nsamples', 'nlags', 'complex'))
+        acf_bkg = xr.DataArray(acf_bkg.astype(np.float32), dims=('nsamples', 'nlags', 'complex'))
         acf_bkg.attrs["long_name"] = "Autocorrelation function of background"
-        acf = xr.DataArray(acf, dims=('time', 'nsamples', 'nlags', 'complex'))
+        acf = xr.DataArray(acf.astype(np.float32), dims=('time', 'nsamples', 'nlags', 'complex'))
         acf.attrs["long_name"] = "Autocorrelation function"
         lidar_ds = xr.Dataset({'acf': acf, 'acf_bkg': acf_bkg,
                               'aziumth': azimuth, 'time': timestamp, 'elevation': elevation})

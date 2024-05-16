@@ -138,14 +138,16 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
         raise RuntimeError("Number of points in FFT < number of lags in sample!")
     pad_after = int((nfft - num_lags))
     pad_before = 0
-    pad_lengths = [(0, 0), (0, 0), (pad_before, pad_after)]
-    frames = cp.pad(cp.asarray(complex_coeff), pad_lengths, mode='constant')
+    frames = cp.asarray(complex_coeff)
     window = 1 / smooth_window * np.ones(smooth_window) 
     if CUPY_CONVOLVE:
-        power = convolve1d(cp.abs(cp.fft.fft(frames)),
+        power = convolve1d(cp.abs(cp.fft.fft(frames, n=nfft)),
+           axis=2, weights=window)
+    elif CUPY_AVAILABLE:
+        power = convolve1d(cp.abs(cp.fft.fft(frames, n=nfft)).get(),
            axis=2, weights=window)
     else:
-        power = convolve1d(cp.abs(cp.fft.fft(frames)).get(),
+        power = convolve1d(cp.abs(cp.fft.fft(frames, n=nfft)),
            axis=2, weights=window)
     if CUPY_AVAILABLE and CUPY_CONVOLVE:
         power = power.asnumpy()
@@ -156,14 +158,17 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
         dims=('range'), attrs=attrs_dict)
     spectra['power'] = xr.DataArray(
         power[:, :, inds_sorted], dims=(('time', 'range', 'vel_bins')))
-    frames = cp.pad(cp.asarray(complex_coeff_bkg), pad_lengths, mode='constant')
+    frames = cp.asarray(complex_coeff_bkg)
+
     if CUPY_CONVOLVE:
-        power = convolve1d(cp.abs(cp.fft.fft(frames)),
+        power = convolve1d(cp.abs(cp.fft.fft(frames, n=nfft)),
+           axis=2, weights=window)
+    elif CUPY_AVAILABLE:
+        power = convolve1d(cp.abs(cp.fft.fft(frames, n=nfft)).get(),
            axis=2, weights=window)
     else:
-        power = convolve1d(cp.abs(cp.fft.fft(frames)).get(),
+        power = convolve1d(cp.abs(cp.fft.fft(frames, n=nfft)),
            axis=2, weights=window)
-
     if CUPY_AVAILABLE and CUPY_CONVOLVE:
         power = power.asnumpy()    
     spectra['power_bkg'] = xr.DataArray(
