@@ -87,7 +87,7 @@ def _gpu_calc_skewness(psd, power, vel_bins, velocity, spec_width, dV):
     spec_width_array = cp.array(spec_width, dtype=cp.float32)
     power_array *= spec_width_array**3
 
-    velocity_array = cp.transpose(np.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
+    velocity_array = cp.transpose(cp.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
     vel_bins_tiled = cp.tile(vel_bins, (times, shp[1], 1))
     gpu_array = 1 / power_array * cp.sum(
         (vel_bins_tiled - velocity_array)**3 * gpu_array, axis=2)

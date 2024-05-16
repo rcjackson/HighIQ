@@ -148,6 +148,8 @@ def read_00_data(file_name, home_point, site='sgp.C1', sample_start=None, sample
 
     for i in range(nsamples):
         data = f.read(8)
+        if len(data) < 8:
+            break
         azimuth[i] = float(struct.unpack("<d", data)[0]) + lidar_home_point
         data = f.read(8)
         elevation[i] = float(struct.unpack("<d", data)[0])
