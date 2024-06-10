@@ -10,6 +10,7 @@ except ImportError:
 import xarray as xr
 
 from scipy.signal import find_peaks
+from scipy.signal.windows import hann
 try:
     from cupy.scipy.ndimage import convolve1d
     CUPY_CONVOLVE = True
@@ -71,10 +72,9 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
         The name of the autocorrelation function of the background.
     block_size_ratio: float
         Increase this value to use more GPU memory for processing. Doing this can
-        poentially optimize processing.
+        potentially optimize processing.
     smooth_window: int
-        Apply running average to power spectra to remove small scale noise using
-        this window size.
+        Apply a Hann window of this number of gates for smoothing the spectra.
 
     Returns
     -------
@@ -139,7 +139,7 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
     pad_after = int((nfft - num_lags))
     pad_before = 0
     frames = cp.asarray(complex_coeff)
-    window = 1 / smooth_window * np.ones(smooth_window) 
+    window = hann(smooth_window)
     if CUPY_CONVOLVE:
         power = convolve1d(cp.abs(cp.fft.fft(frames, n=nfft)),
            axis=2, weights=window)
