@@ -41,9 +41,9 @@ def _fast_expand(complex_array, factor, num_per_block=200):
     return expanded_array
 
 
-def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, time_window=None,
+def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, time_window=10,
             acf_name='acf', acf_bkg_name='acf_bkg', block_size_ratio=1.0,
-            smooth_window=5):
+            nsamples=4000):
     """
     This function will get the power spectral density from the autocorrelation function.
 
@@ -73,9 +73,8 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
     block_size_ratio: float
         Increase this value to use more GPU memory for processing. Doing this can
         potentially optimize processing.
-    smooth_window: int
-        Apply a Hann window of this number of gates for smoothing the spectra.
-
+    nsamples: int
+        Number of samples in ACF
     Returns
     -------
     spectra: ACT Dataset
@@ -97,22 +96,19 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
         fs_pint = Q_(spectra.attrs["wavelength"])
         fs_pint = fs_pint.to("m")
         wavelength = fs_pint.magnitude
-
-    if time_window is not None:
-        spectra = spectra.resample(time='%ds' % int(time_window)).mean()
-    else:
-        spectra[acf_bkg_name] = xr.DataArray(np.ones(spectra[acf_name].shape),
-                                             dims=spectra[acf_name].dims) * spectra[acf_bkg_name]
-
+    
+    spectra = spectra.resample(time='%ds' % time_window).mean()
+    acf = spectra[acf_name]
+    num_times = acf.shape[0]
     num_gates = int(gate_resolution / 3)
-    complex_coeff_in = spectra[acf_name].isel(complex=0).values + \
-        spectra[acf_name].isel(complex=1).values * 1j
-
+    complex_coeff_in = acf.isel(complex=0).values + \
+        acf.isel(complex=1).values * 1j
     complex_coeff = np.zeros(
-        (complex_coeff_in.shape[0], int(complex_coeff_in.shape[1] / num_gates),
+        (num_times, int(complex_coeff_in.shape[1] / num_gates),
             complex_coeff_in.shape[2]), dtype=np.complex128)
     for i in range(complex_coeff.shape[1]):
-        complex_coeff[:, i, :] = np.sum(complex_coeff_in[:, (num_gates * i):(num_gates * i + 1), :], axis=1)
+        complex_coeff[:, i, :] = np.sum(
+            complex_coeff_in[:, (num_gates * i):(num_gates * (i + 1)), :], axis=1)
     del complex_coeff_in
     freq = np.fft.fftfreq(nfft) * fs
     spectra.attrs['nyquist_velocity'] = "%f m s-1" % (wavelength / (4 * 1 / fs))
@@ -129,26 +125,23 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
     complex_coeff_bkg_in = (spectra[acf_bkg_name].isel(complex=0).values + spectra[acf_bkg_name].isel(complex=1).values * 1j)
 
     complex_coeff_bkg = np.zeros(
-        (complex_coeff_bkg_in.shape[0], int(complex_coeff_bkg_in.shape[1] / num_gates),
+        (num_times, int(complex_coeff_bkg_in.shape[1] / num_gates),
             complex_coeff_bkg_in.shape[2]), dtype=np.complex128)
     for i in range(complex_coeff.shape[1]):
-        complex_coeff_bkg[:, i, :] = np.sum(complex_coeff_bkg_in[:, (num_gates * i):(num_gates * i + 1), :], axis=1)
+        complex_coeff_bkg[:, i, :] = np.sum(
+            complex_coeff_bkg_in[:, (num_gates * i):(num_gates * (i + 1)), :], axis=1)
     num_lags = complex_coeff_bkg_in.shape[2]
     if nfft < num_lags:
         raise RuntimeError("Number of points in FFT < number of lags in sample!")
     pad_after = int((nfft - num_lags))
     pad_before = 0
     frames = cp.asarray(complex_coeff)
-    window = hann(smooth_window)
     if CUPY_CONVOLVE:
-        power = convolve1d(cp.abs(cp.fft.fft(frames, n=nfft)),
-           axis=2, weights=window)
+        power = cp.fft.fft(frames, n=nfft)
     elif CUPY_AVAILABLE:
-        power = convolve1d(cp.abs(cp.fft.fft(frames, n=nfft)).get(),
-           axis=2, weights=window)
+        power = (cp.fft.fft(frames, n=nfft)).get()
     else:
-        power = convolve1d(cp.abs(cp.fft.fft(frames, n=nfft)),
-           axis=2, weights=window)
+        power = cp.fft.fft(frames, n=nfft)
     if CUPY_AVAILABLE and CUPY_CONVOLVE:
         power = power.asnumpy()
 
@@ -156,29 +149,22 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
     spectra['range'] = xr.DataArray(
         gate_resolution * np.arange(int(frames.shape[1])),
         dims=('range'), attrs=attrs_dict)
-    spectra['power'] = xr.DataArray(
-        power[:, :, inds_sorted], dims=(('time', 'range', 'vel_bins')))
     frames = cp.asarray(complex_coeff_bkg)
 
     if CUPY_CONVOLVE:
-        power = convolve1d(cp.abs(cp.fft.fft(frames, n=nfft)),
-           axis=2, weights=window)
+        power_bkg = cp.fft.fft(frames, n=nfft)
     elif CUPY_AVAILABLE:
-        power = convolve1d(cp.abs(cp.fft.fft(frames, n=nfft)).get(),
-           axis=2, weights=window)
+        power_bkg = cp.fft.fft(frames, n=nfft).get()
     else:
-        power = convolve1d(cp.abs(cp.fft.fft(frames, n=nfft)),
-           axis=2, weights=window)
+        power_bkg = cp.fft.fft(frames, n=nfft)
     if CUPY_AVAILABLE and CUPY_CONVOLVE:
-        power = power.asnumpy()    
-    spectra['power_bkg'] = xr.DataArray(
-        power[:, :, inds_sorted], dims=('time', 'range', 'vel_bins'))
-
+        power_bkg = power.asnumpy()    
+    power = power[:, :, inds_sorted]
+    power_bkg = power_bkg[:, :, inds_sorted]
     # Subtract background noise
-    spectra['power_spectral_density'] = spectra['power'] / spectra['power_bkg']
+    spectra['power_spectral_density'] = (['time', 'range', 'vel_bins'], np.abs(power) / np.abs(power_bkg))
 
     # Ground noise floor to 1
-    spectra['power_spectral_density'] = spectra['power_spectral_density'] - spectra['power_spectral_density'].min(axis=2) + 1
     spectra['power_spectral_density'].attrs["long_name"] = "Power spectral density"
     spectra['power_spectral_density'].attrs["units"] = ''
     spectra['range'].attrs['long_name'] = "Range"
