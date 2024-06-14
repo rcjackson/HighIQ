@@ -140,7 +140,6 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
         power = cp.fft.fft(frames, n=nfft)
     elif CUPY_AVAILABLE:
         power = cp.fft.fft(frames, n=nfft)
-        del frames
     else:
         power = cp.fft.fft(frames, n=nfft)
     if CUPY_AVAILABLE and CUPY_CONVOLVE:
@@ -150,6 +149,7 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
     spectra['range'] = xr.DataArray(
         gate_resolution * np.arange(int(frames.shape[1])),
         dims=('range'), attrs=attrs_dict)
+    del frames
     frames = cp.asarray(complex_coeff_bkg)
 
     if CUPY_CONVOLVE:
