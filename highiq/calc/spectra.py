@@ -139,11 +139,11 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
     if CUPY_CONVOLVE:
         power = cp.fft.fft(frames, n=nfft)
     elif CUPY_AVAILABLE:
-        power = cp.fft.fft(frames, n=nfft)
+        arr = cp.fft.fft(frames, n=nfft)
+        power = arr.get()
+        del arr
     else:
         power = cp.fft.fft(frames, n=nfft)
-    if CUPY_AVAILABLE and CUPY_CONVOLVE:
-        power = power.asnumpy()
 
     attrs_dict = {'long_name': 'Range', 'units': 'm'}
     spectra['range'] = xr.DataArray(
@@ -155,11 +155,12 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
     if CUPY_CONVOLVE:
         power_bkg = cp.fft.fft(frames, n=nfft)
     elif CUPY_AVAILABLE:
-        power_bkg = cp.fft.fft(frames, n=nfft).get()
+        arr = cp.fft.fft(frames, n=nfft)
+        power_bkg = arr.get()
+        del arr
     else:
         power_bkg = cp.fft.fft(frames, n=nfft)
-    if CUPY_AVAILABLE and CUPY_CONVOLVE:
-        power_bkg = power.asnumpy()    
+
     power = power[:, :, inds_sorted]
     power_bkg = power_bkg[:, :, inds_sorted]
     # Subtract background noise
