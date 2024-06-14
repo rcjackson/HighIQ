@@ -109,7 +109,7 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
     for i in range(complex_coeff.shape[1]):
         complex_coeff[:, i, :] = np.sum(
             complex_coeff_in[:, (num_gates * i):(num_gates * (i + 1)), :], axis=1)
-    del complex_coeff_in
+    complex_coeff_in = None
     freq = np.fft.fftfreq(nfft) * fs
     spectra.attrs['nyquist_velocity'] = "%f m s-1" % (wavelength / (4 * 1 / fs))
     spectra['freq_bins'] = xr.DataArray(freq, dims=['freq'])
@@ -141,8 +141,8 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
     elif CUPY_AVAILABLE:
         arr = cp.fft.fft(frames, n=nfft)
         power = arr.get()
-        del arr
-        del frames
+        arr = None
+        frames = None
     else:
         power = cp.fft.fft(frames, n=nfft)
 
@@ -157,7 +157,7 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
     elif CUPY_AVAILABLE:
         arr = cp.fft.fft(frames, n=nfft)
         power_bkg = arr.get()
-        del arr
+        arr = None
     else:
         power_bkg = cp.fft.fft(frames, n=nfft)
 
@@ -173,6 +173,8 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
     spectra['range'].attrs['units'] = 'm'
     spectra['vel_bins'].attrs['long_name'] = "Doppler velocity"
     spectra['vel_bins'].attrs['units'] = 'm s-1'
+    power = None
+    power_bkg = None
     return spectra
 
 
