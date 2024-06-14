@@ -142,14 +142,14 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
         arr = cp.fft.fft(frames, n=nfft)
         power = arr.get()
         del arr
+        del frames
     else:
         power = cp.fft.fft(frames, n=nfft)
 
     attrs_dict = {'long_name': 'Range', 'units': 'm'}
     spectra['range'] = xr.DataArray(
-        gate_resolution * np.arange(int(frames.shape[1])),
+        gate_resolution * np.arange(int(power.shape[1])),
         dims=('range'), attrs=attrs_dict)
-    del frames
     frames = cp.asarray(complex_coeff_bkg)
 
     if CUPY_CONVOLVE:
