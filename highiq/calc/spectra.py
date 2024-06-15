@@ -97,8 +97,8 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
         fs_pint = fs_pint.to("m")
         wavelength = fs_pint.magnitude
     
-    spectra = spectra.resample(time='%ds' % time_window).mean()
-    acf = spectra[acf_name]
+    spectra_out = spectra.resample(time='%ds' % time_window).mean()
+    acf = spectra_out[acf_name]
     num_times = acf.shape[0]
     num_gates = int(gate_resolution / 3)
     complex_coeff_in = acf.isel(complex=0).values + \
@@ -111,18 +111,18 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
             complex_coeff_in[:, (num_gates * i):(num_gates * (i + 1)), :], axis=1)
     complex_coeff_in = None
     freq = np.fft.fftfreq(nfft) * fs
-    spectra.attrs['nyquist_velocity'] = "%f m s-1" % (wavelength / (4 * 1 / fs))
-    spectra['freq_bins'] = xr.DataArray(freq, dims=['freq'])
-    spectra['freq_bins'].attrs["long_name"] = "Doppler spectra bins in frequency units"
-    spectra['freq_bins'].attrs["units"] = "Hz"
-    vel_bins = spectra['freq_bins'] * (wavelength / 2)
+    spectra_out.attrs['nyquist_velocity'] = "%f m s-1" % (wavelength / (4 * 1 / fs))
+    spectra_out['freq_bins'] = xr.DataArray(freq, dims=['freq'])
+    spectra_out['freq_bins'].attrs["long_name"] = "Doppler spectra bins in frequency units"
+    spectra_out['freq_bins'].attrs["units"] = "Hz"
+    vel_bins = spectra_out['freq_bins'] * (wavelength / 2)
     inds_sorted = np.argsort(vel_bins.values)
     vel_bins = vel_bins[inds_sorted]
     attrs_dict = {'long_name': 'Doppler velocity', 'units': 'm s-1'}
-    spectra['vel_bins'] = xr.DataArray(vel_bins, dims=('vel_bins'), attrs=attrs_dict)
-    spectra['freq_bins'] = spectra['freq_bins'][inds_sorted]
+    spectra_out['vel_bins'] = xr.DataArray(vel_bins, dims=('vel_bins'), attrs=attrs_dict)
+    spectra_out['freq_bins'] = spectra_out['freq_bins'][inds_sorted]
 
-    complex_coeff_bkg_in = (spectra[acf_bkg_name].isel(complex=0).values + spectra[acf_bkg_name].isel(complex=1).values * 1j)
+    complex_coeff_bkg_in = (spectra_out[acf_bkg_name].isel(complex=0).values + spectra_out[acf_bkg_name].isel(complex=1).values * 1j)
 
     complex_coeff_bkg = np.zeros(
         (num_times, int(complex_coeff_bkg_in.shape[1] / num_gates),
@@ -164,18 +164,19 @@ def get_psd(spectra, gate_resolution=60., wavelength=None, fs=None, nfft=1024, t
     power = power[:, :, inds_sorted]
     power_bkg = power_bkg[:, :, inds_sorted]
     # Subtract background noise
-    spectra['power_spectral_density'] = (['time', 'range', 'vel_bins'], np.abs(power) / np.abs(power_bkg))
+    spectra_out['power_spectral_density'] = (['time', 'range', 'vel_bins'], np.abs(power) / np.abs(power_bkg))
 
     # Ground noise floor to 1
-    spectra['power_spectral_density'].attrs["long_name"] = "Power spectral density"
-    spectra['power_spectral_density'].attrs["units"] = ''
-    spectra['range'].attrs['long_name'] = "Range"
-    spectra['range'].attrs['units'] = 'm'
-    spectra['vel_bins'].attrs['long_name'] = "Doppler velocity"
-    spectra['vel_bins'].attrs['units'] = 'm s-1'
+    spectra_out['power_spectral_density'].attrs["long_name"] = "Power spectral density"
+    spectra_out['power_spectral_density'].attrs["units"] = ''
+    spectra_out['range'].attrs['long_name'] = "Range"
+    spectra_out['range'].attrs['units'] = 'm'
+    spectra_out['vel_bins'].attrs['long_name'] = "Doppler velocity"
+    spectra_out['vel_bins'].attrs['units'] = 'm s-1'
     power = None
     power_bkg = None
-    return spectra
+    spectra_out = spectra_out.drop(["acf", "acf_bkg"])
+    return spectra_out
 
 
 def calc_num_peaks(my_spectra, **kwargs):
