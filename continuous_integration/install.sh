@@ -14,7 +14,7 @@ conda config --set always_yes yes
 conda config --set show_channel_urls true
 conda install -c anaconda setuptools
 conda update -q conda
-conda info -a 
+conda info -a
 
 ## Create a testenv with the correct Python version
 conda env create -f continuous_integration/environment-$PYTHON_VERSION.yml

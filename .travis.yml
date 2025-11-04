@@ -18,6 +18,6 @@ matrix:
       env:
         - PYTHON_VERSION="3.7"
         - DOC_BUILD="true"
-    
+
 after_success:
-    - source continuous_integration/build_docs.sh;        
+    - source continuous_integration/build_docs.sh;

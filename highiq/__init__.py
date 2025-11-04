@@ -1,5 +1,4 @@
-__version__ = "1.2"
-from . import calc
-from . import io
-from . import vis
-from . import testing
+__version__ = "2025.11"
+from . import calc  # noqa: F401
+from . import io  # noqa: F401
+from . import testing  # noqa: F401

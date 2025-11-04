@@ -9,19 +9,19 @@ on:
     - cron: '0 2 * * *'  # Runs at 2:00 AM UTC every day
 
 jobs:
-   build:
-     name: ${{ matrix.os }}-${{ matrix.python-version }}
-     if: github.repository == 'rcjackson/HighIQ'
-     runs-on: ${{ matrix.os }}-latest
-     defaults:
+    build:
+      name: ${{ matrix.os }}-${{ matrix.python-version }}
+      if: github.repository == 'rcjackson/HighIQ'
+      runs-on: ${{ matrix.os }}-latest
+      defaults:
         run:
           shell: bash -l {0}
-     strategy:
+      strategy:
         fail-fast: false
         matrix:
           python-version: ["3.11", "3.12", "3.13", "3.14"]
           os: [ubuntu]
-          
+
     steps:
       - uses: actions/checkout@v5
       - name: Install Conda environment with Micromamba
@@ -61,4 +61,3 @@ jobs:
           env_vars: OS,PYTHON
           name: codecov-umbrella
           fail_ci_if_error: false
-

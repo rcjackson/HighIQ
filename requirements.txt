@@ -2,3 +2,4 @@ numpy
 scipy
 pint
 xarray
+netcdf4
