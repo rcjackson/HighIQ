@@ -1,9 +1,8 @@
-name: testenv
+name: highiq-dev
 channels:
   - conda-forge
-  - defaults
 dependencies:
-  - python=3.6
+  - python
   - numpy
   - scipy
   - matplotlib
@@ -14,6 +13,5 @@ dependencies:
   - xarray
   - flake8
   - ipython
-  - pint=0.8.1
+  - pint
   - cupy
-  - cudatoolkit
