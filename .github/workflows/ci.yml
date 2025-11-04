@@ -11,7 +11,7 @@ on:
 jobs:
    build:
      name: ${{ matrix.os }}-${{ matrix.python-version }}
-     if: github.repository == 'openradar/PyDDA'
+     if: github.repository == 'rcjackson/HighIQ'
      runs-on: ${{ matrix.os }}-latest
      defaults:
         run:
