@@ -8,5 +8,5 @@ You can test the processing from a sample ACF file by loading
 
 import os
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
-TEST_FILE = os.path.join(DATA_PATH, 'testsig.a1.20180801.000003.nc')
+DATA_PATH = os.path.join(os.path.dirname(__file__), "data")
+TEST_FILE = os.path.join(DATA_PATH, "testsig.a1.20180801.000003.nc")

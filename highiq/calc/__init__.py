@@ -15,5 +15,6 @@ This module contains the methods that do the core calculations of HighIQ.
     calc_num_peaks
 
 """
-from .moments import get_lidar_moments
-from .spectra import get_psd, calc_num_peaks
+
+from .moments import get_lidar_moments  # noqa: F401
+from .spectra import get_psd, calc_num_peaks  # noqa: F401
