@@ -25,5 +25,5 @@ out_ds["power_spectral_density"].sel(range=950.0, method="nearest").plot(
 )
 plt.legend()
 plt.show()
-
+plt.savefig("power_spectra_example.png")
 test_file.close()

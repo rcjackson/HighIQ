@@ -1,130 +1,111 @@
 import numpy as np
 import warnings
-
 try:
     import cupy as cp
+    cp.zeros(1)  # quick allocation test
+    xp = cp
+    print("Using CuPy (GPU)")
+    from cupyx.scipy.signal import find_peaks
+except Exception:
+    import numpy as np
+    xp = np
+    print("Using NumPy (CPU)")
+    from scipy.signal import find_peaks
 
-    CUPY_AVAILABLE = True
-except ImportError:
-    import numpy as cp
-
-    CUPY_AVAILABLE = False
-    warnings.warn("CuPy not installed...reverting to Numpy!", Warning)
 import xarray as xr
 
 
 def _gpu_calc_power(psd, dV, block_size=200, normed=True):
     shp = psd.shape
-    power = np.zeros((shp[0], shp[1]))
+    power = xp.zeros((shp[0], shp[1]))
     if len(shp) == 3:
-        gpu_array = cp.array(psd, dtype=cp.float32)
+        gpu_array = xp.array(psd, dtype=xp.float32)
         if normed:
             gpu_array = gpu_array * dV
-        gpu_array = cp.sum(gpu_array, axis=2)
-        if CUPY_AVAILABLE:
-            power = gpu_array.get()
-        else:
-            power = gpu_array
+        gpu_array = xp.sum(gpu_array, axis=2)
+        power = gpu_array.get()
+        
     else:
-        gpu_array = cp.array(psd.values, dtype=cp.float32)
+        gpu_array = xp.array(psd.values, dtype=xp.float32)
         if normed:
             gpu_array = gpu_array * dV
-        gpu_array = cp.sum(gpu_array, axis=1)
-        if CUPY_AVAILABLE:
-            power = gpu_array.get()
-        else:
-            power = gpu_array
+        gpu_array = xp.sum(gpu_array, axis=1)
+        power = gpu_array.get()
+        
     return power
 
 
 def _gpu_calc_velocity(psd, power, vel_bins, dV):
     shp = psd.shape
-    gpu_array = cp.array(psd, dtype=cp.float32)
-    power_array = cp.array(power, dtype=cp.float32)
-    vel_bins_tiled = cp.tile(vel_bins, (shp[0], shp[1], 1))
-    gpu_array = 1 / power_array * cp.sum(gpu_array * vel_bins_tiled, axis=2)
-    if CUPY_AVAILABLE:
-        velocity = gpu_array.get()
-    else:
-        velocity = gpu_array
+    gpu_array = xp.array(psd, dtype=xp.float32)
+    power_array = xp.array(power, dtype=xp.float32)
+    vel_bins_tiled = xp.tile(vel_bins, (shp[0], shp[1], 1))
+    gpu_array = 1 / power_array * xp.sum(gpu_array * vel_bins_tiled, axis=2)
+    velocity = gpu_array
     return velocity
 
 
 def _gpu_calc_velocity_dumb(psd, vel_bins):
     dV = np.diff(vel_bins)[0]
     vel_min = vel_bins.min()
-    gpu_array = cp.array(psd)
-    gpu_array = cp.argmax(gpu_array, axis=2)
-    gpu_array = vel_min + gpu_array.astype(cp.float32) * dV
-    if CUPY_AVAILABLE:
-        velocity = gpu_array.get()
-    else:
-        velocity = gpu_array
+    gpu_array = xp.array(psd)
+    gpu_array = xp.argmax(gpu_array, axis=2)
+    gpu_array = vel_min + gpu_array.astype(xp.float32) * dV
+    velocity = gpu_array
     return velocity
 
 
 def _gpu_calc_spectral_width(psd, power, vel_bins, velocity, dV):
     shp = psd.shape
     times = shp[0]
-    specwidth = cp.zeros((shp[0], shp[1]))
-
-    gpu_array = cp.array(psd.values, dtype=cp.float32)
-    power_array = cp.array(power, dtype=cp.float32)
-
-    velocity_array = cp.transpose(cp.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
-    vel_bins_tiled = cp.tile(vel_bins, (times, shp[1], 1))
-    gpu_array = cp.sqrt(
+    specwidth = xp.zeros((shp[0], shp[1]))
+    gpu_array = xp.array(psd.values, dtype=xp.float32)
+    power_array = xp.array(power, dtype=xp.float32)
+    velocity_array = xp.transpose(xp.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
+    vel_bins_tiled = xp.tile(vel_bins, (times, shp[1], 1))
+    gpu_array = xp.sqrt(
         1
         / power_array
-        * cp.sum((vel_bins_tiled - velocity_array) ** 2 * gpu_array, axis=2)
+        * xp.sum((vel_bins_tiled - velocity_array) ** 2 * gpu_array, axis=2)
     )
-    if CUPY_AVAILABLE:
-        specwidth = gpu_array.get()
-    else:
-        specwidth = gpu_array
+    specwidth = gpu_array
     return specwidth
 
 
 def _gpu_calc_skewness(psd, power, vel_bins, velocity, spec_width, dV):
     shp = psd.shape
     times = shp[0]
-    gpu_array = cp.array(psd.values, dtype=cp.float32)
-    power_array = cp.array(power, dtype=cp.float32)
-    spec_width_array = cp.array(spec_width, dtype=cp.float32)
+    gpu_array = xp.array(psd.values, dtype=xp.float32)
+    power_array = xp.array(power, dtype=xp.float32)
+    spec_width_array = xp.array(spec_width, dtype=xp.float32)
     power_array *= spec_width_array**3
 
-    velocity_array = cp.transpose(cp.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
-    vel_bins_tiled = cp.tile(vel_bins, (times, shp[1], 1))
+    velocity_array = xp.transpose(xp.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
+    vel_bins_tiled = xp.tile(vel_bins, (times, shp[1], 1))
     gpu_array = (
         1
         / power_array
-        * cp.sum((vel_bins_tiled - velocity_array) ** 3 * gpu_array, axis=2)
+        * xp.sum((vel_bins_tiled - velocity_array) ** 3 * gpu_array, axis=2)
     )
-    if CUPY_AVAILABLE:
-        skewness = gpu_array.get()
-    else:
-        skewness = gpu_array
+    skewness = gpu_array
     return skewness
 
 
 def _gpu_calc_kurtosis(psd, power, vel_bins, velocity, spec_width, dV):
     shp = psd.shape
     kurtosis = np.zeros((shp[0], shp[1]))
-    gpu_array = cp.array(psd.values, dtype=cp.float32)
-    power_array = cp.array(power, dtype=cp.float32)
-    spec_width_array = cp.array(spec_width, dtype=cp.float32)
+    gpu_array = xp.array(psd.values, dtype=xp.float32)
+    power_array = xp.array(power, dtype=xp.float32)
+    spec_width_array = xp.array(spec_width, dtype=xp.float32)
     power_array *= spec_width_array**4
-    velocity_array = cp.transpose(cp.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
-    vel_bins_tiled = cp.tile(vel_bins, (shp[0], shp[1], 1))
+    velocity_array = xp.transpose(xp.tile(velocity, (shp[2], 1, 1)), [1, 2, 0])
+    vel_bins_tiled = xp.tile(vel_bins, (shp[0], shp[1], 1))
     gpu_array = (
         1
         / power_array
-        * cp.sum((vel_bins_tiled - velocity_array) ** 4 * gpu_array, axis=2)
+        * xp.sum((vel_bins_tiled - velocity_array) ** 4 * gpu_array, axis=2)
     )
-    if CUPY_AVAILABLE:
-        kurtosis = gpu_array.get()
-    else:
-        kurtosis = gpu_array
+    kurtosis = gpu_array
     return kurtosis
 
 
@@ -192,6 +173,7 @@ def get_lidar_moments(
         velocity_dumb = _gpu_calc_velocity_dumb(
             linear_psd_0filled, spectra["vel_bins"].values
         )
+        velocity_dumb = velocity_dumb.get() if hasattr(velocity_dumb, "get") else velocity_dumb
         spectra["radial_velocity_max_peak"] = xr.DataArray(
             velocity_dumb, dims=("time", "range")
         )
@@ -199,6 +181,7 @@ def get_lidar_moments(
             "long_name"
         ] = "Doppler velocity derived using location of highest peak in spectra."
         spectra["radial_velocity_max_peak"].attrs["units"] = "m s-1"
+        velocity = velocity.get() if hasattr(velocity, "get") else velocity
         spectra["radial_velocity"] = xr.DataArray(velocity, dims=("time", "range"))
         spectra["radial_velocity"].attrs[
             "long_name"
@@ -221,6 +204,7 @@ def get_lidar_moments(
         )
 
     if "spectral_width" in which_moments:
+        spectral_width = spectral_width.get() if hasattr(spectral_width, "get") else spectral_width
         spectra["spectral_width"] = xr.DataArray(spectral_width, dims=("time", "range"))
         spectra["spectral_width"].attrs["long_name"] = "Spectral width"
         spectra["spectral_width"].attrs["units"] = "m s-1"
@@ -233,7 +217,9 @@ def get_lidar_moments(
         skewness = _gpu_calc_skewness(
             linear_psd, power, spectra["vel_bins"].values, velocity, spectral_width, dV
         )
-        spectra["skewness"] = xr.DataArray(skewness, dims=("time", "range"))
+        skewness = skewness.get() if hasattr(skewness, "get") else skewness
+        spectra["skewness"] = xr.DataArray(
+            skewness, dims=("time", "range"))
         if "intensity" in which_moments:
             spectra["skewness"] = spectra["skewness"].where(
                 spectra.intensity > intensity_thresh
@@ -245,7 +231,9 @@ def get_lidar_moments(
         kurtosis = _gpu_calc_kurtosis(
             linear_psd, power, spectra["vel_bins"].values, velocity, spectral_width, dV
         )
-        spectra["kurtosis"] = xr.DataArray(kurtosis, dims=("time", "range"))
+        kurtosis = kurtosis.get() if hasattr(kurtosis, "get") else kurtosis
+        spectra["kurtosis"] = xr.DataArray(
+            kurtosis, dims=("time", "range"))
         if "intensity" in which_moments:
             spectra["kurtosis"] = spectra["kurtosis"].where(
                 spectra.intensity > intensity_thresh
