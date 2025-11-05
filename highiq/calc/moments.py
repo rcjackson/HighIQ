@@ -23,14 +23,14 @@ def _gpu_calc_power(psd, dV, block_size=200, normed=True):
         if normed:
             gpu_array = gpu_array * dV
         gpu_array = xp.sum(gpu_array, axis=2)
-        power = gpu_array.get()
+        power = gpu_array.get() if hasattr(gpu_array, "get") else gpu_array
         
     else:
         gpu_array = xp.array(psd.values, dtype=xp.float32)
         if normed:
             gpu_array = gpu_array * dV
         gpu_array = xp.sum(gpu_array, axis=1)
-        power = gpu_array.get()
+        power = gpu_array.get() if hasattr(gpu_array, "get") else gpu_array
         
     return power
 

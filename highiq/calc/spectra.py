@@ -194,7 +194,7 @@ def get_psd(
     )
     frames = xp.asarray(complex_coeff_bkg)
     arr = xp.fft.fft(frames, n=nfft)
-    power_bkg = xp.abs(xp.fft.fftshift(arr, axes=2)).get()
+    power_bkg = xp.abs(xp.fft.fftshift(arr, axes=2))
     power_bkg = power_bkg.get() if hasattr(power_bkg, "get") else power_bkg
     # Subtract background noise
     spectra_out["power_spectral_density"] = (
