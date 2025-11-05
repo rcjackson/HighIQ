@@ -69,7 +69,7 @@ from the example file, we simply do::
    $
    $ # For plotting the spectra, simply use xarray's built in functionality
    $ #
-   $ my_ds_processed.power_spectra_normed_interp.sel(range=400, method='nearest').plot()
+   $ my_ds_processed.power_spectral_density.sel(range=400, method='nearest').plot()
 
 .. image:: images/spectra_plot.png
    :width: 600
@@ -99,14 +99,14 @@ do::
    $ my_ds = highiq.calc.get_psd(my_ds)
    $ my_ds = highiq.calc.get_lidar_moments(my_ds)
    $ # Make a stricter mask for Doppler velocity to favor excluding more noise
-   $ my_ds['doppler_velocity'] = my_ds['doppler_velocity'].where(my_ds.intensity > 1.2)
+   $ my_ds['radial_velocity'] = my_ds['radial_velocity'].where(my_ds.intensity > 1.2)
 
    $ # With ACT, we set up a TimeSeriesDisplay object with two sub plots
    $ my_display = act.plotting.TimeSeriesDisplay(my_ds, figsize=(10,7), subplot_shape=(2,))
 
    $ # The plot function takes in the same kwargs as matplotlib's plotting routines
-   $ my_display.plot('intensity', subplot_index=(0,), cmap='act_HomeyerRainbow', vmin=1, vmax=10)
-   $ my_display.plot('doppler_velocity', subplot_index=(1,), cmap='act_balance', vmin=-5, vmax=5)
+   $ my_display.plot('intensity', subplot_index=(0,), cmap='HomeyerRainbow', vmin=1, vmax=10)
+   $ my_display.plot('radial_velocity', subplot_index=(1,), cmap='balance', vmin=-5, vmax=5)
    $ my_display.set_yrng([0, 5000], subplot_index=(0,))
    $ my_display.set_yrng([0, 5000], subplot_index=(1,))
    $ my_display.fig.savefig('spectra_difference.png', dpi=300)
