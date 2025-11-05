@@ -9,10 +9,14 @@ except ImportError:
     import numpy as cp
 
     CUPY_AVAILABLE = False
-    warnings.warn("CuPy not installed...reverting to Numpy!", Warning)
+    warnings.warn("CuPy not installed...reverting to Numpy/SciPy!", Warning)
 import xarray as xr
 
-from scipy.signal import find_peaks
+if not CUPY_AVAILABLE:
+    from scipy.signal import find_peaks
+else:
+    from cupyx.scipy.signal import find_peaks
+
 from pint import UnitRegistry
 
 
@@ -46,6 +50,7 @@ def get_psd(
     acf_bkg_name="acf_bkg",
     block_size_ratio=1.0,
     nsamples=4000,
+    hamming_window=True,
 ):
     """
     This function will get the power spectral density from the autocorrelation function.
@@ -78,6 +83,9 @@ def get_psd(
         potentially optimize processing.
     nsamples: int
         Number of samples in ACF
+    hamming_window: bool
+        Whether to apply a Hamming window to the data before performing the FFT.
+
     Returns
     -------
     spectra: ACT Dataset
@@ -126,7 +134,15 @@ def get_psd(
         complex_coeff[:, :, 0], (complex_coeff.shape[2], 1, 1)
     ).transpose(1, 2, 0)
 
-    freq = np.fft.fftfreq(nfft) * fs
+    if hamming_window:
+        # Only use right half of the Hamming window
+        hamming_win = np.hamming(complex_coeff.shape[2] * 2)[complex_coeff.shape[2] :]
+        hamming_win = np.tile(
+            hamming_win, (complex_coeff.shape[0], complex_coeff.shape[1], 1)
+        )
+        complex_coeff = complex_coeff * hamming_win
+
+    freq = np.fft.fftshift(np.fft.fftfreq(nfft) * fs)
     spectra_out.attrs["nyquist_velocity"] = "%f m s-1" % (wavelength / (4 * 1 / fs))
     spectra_out["freq_bins"] = xr.DataArray(freq, dims=["freq"])
     spectra_out["freq_bins"].attrs[
@@ -162,6 +178,12 @@ def get_psd(
     complex_coeff_bkg = complex_coeff_bkg / cp.tile(
         complex_coeff_bkg[:, :, 0], (complex_coeff_bkg.shape[2], 1, 1)
     ).transpose(1, 2, 0)
+    if hamming_window:
+        hamming_win = np.hamming(complex_coeff.shape[2] * 2)[complex_coeff.shape[2] :]
+        hamming_win = np.tile(
+            hamming_win, (complex_coeff_bkg.shape[0], complex_coeff_bkg.shape[1], 1)
+        )
+        complex_coeff_bkg = complex_coeff_bkg * hamming_win
 
     num_lags = complex_coeff_bkg_in.shape[2]
     if nfft < num_lags:
@@ -170,12 +192,12 @@ def get_psd(
 
     if CUPY_AVAILABLE:
         arr = cp.fft.fft(frames, n=nfft)
-        power = arr.get()
+        power = cp.abs(cp.fft.fftshift(arr, axes=2)).get()
         arr = None
         frames = None
     else:
         power = cp.fft.fft(frames, n=nfft)
-
+        power = cp.abs(cp.fft.fftshift(power, axes=2))
     attrs_dict = {"long_name": "Range", "units": "m"}
     spectra_out["range"] = xr.DataArray(
         gate_resolution * np.arange(power.shape[1]),
@@ -186,17 +208,16 @@ def get_psd(
 
     if CUPY_AVAILABLE:
         arr = cp.fft.fft(frames, n=nfft)
-        power_bkg = arr.get()
+        power_bkg = cp.abs(cp.fft.fftshift(arr, axes=2)).get()
         arr = None
     else:
         power_bkg = cp.fft.fft(frames, n=nfft)
+        power_bkg = cp.abs(cp.fft.fftshift(power_bkg, axes=2))
 
-    power = power[:, :, inds_sorted]
-    power_bkg = power_bkg[:, :, inds_sorted]
     # Subtract background noise
     spectra_out["power_spectral_density"] = (
         ["time", "range", "vel_bins"],
-        np.abs(power) / np.abs(power_bkg),
+        power / power_bkg,
     )
 
     # Ground noise floor to 1

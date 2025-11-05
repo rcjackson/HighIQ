@@ -22,7 +22,7 @@ copyright = "2019, Bobby Jackson"
 author = "Bobby Jackson"
 
 # The full version, including alpha/beta/rc tags
-release = "1.0"
+release = "1.2"
 
 extensions = [
     "sphinx.ext.autodoc",
@@ -66,8 +66,7 @@ html_theme = "alabaster"
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
-html_theme = "neo_rtd_theme"
-
+html_css_files = ["css/custom.css"]  # your stylesheet(s) inside _static/css/
 html_theme_path = [sphinx_theme.get_html_theme_path()]
 
 # Numpy autodoc attributes
