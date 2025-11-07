@@ -1,13 +1,16 @@
 import numpy as np
 import warnings
+
 try:
     import cupy as cp
+
     cp.zeros(1)  # quick allocation test
     xp = cp
     print("Using CuPy (GPU)")
     from cupyx.scipy.signal import find_peaks
 except Exception:
     import numpy as np
+
     xp = np
     print("Using NumPy (CPU)")
     from scipy.signal import find_peaks
@@ -185,7 +188,7 @@ def get_psd(
     arr = xp.fft.fft(frames, n=nfft)
     power = xp.abs(xp.fft.fftshift(arr, axes=2))
     power = power.get() if hasattr(power, "get") else power
-        
+
     attrs_dict = {"long_name": "Range", "units": "m"}
     spectra_out["range"] = xr.DataArray(
         gate_resolution * np.arange(power.shape[1]),
@@ -273,7 +276,7 @@ def calc_num_peaks(my_spectra, **kwargs):
                     continue
                 peak_loc[i, j, k] = vel_bins[peaks[k]]
     num_peaks = num_peaks.get() if hasattr(num_peaks, "get") else num_peaks
-    peak_loc = peak_loc.get() if hasattr(peak_loc, "get") else peak
+    peak_loc = peak_loc.get() if hasattr(peak_loc, "get") else peak_loc
     my_spectra["npeaks"] = xr.DataArray(num_peaks, dims=("time", "range"))
     my_spectra["npeaks"].attrs["long_name"] = "Number of peaks in Doppler spectra"
     my_spectra["npeaks"].attrs["units"] = "1"
