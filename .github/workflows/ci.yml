@@ -2,9 +2,9 @@ name: CI Workflow
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
   schedule:
     - cron: '0 2 * * *'  # Runs at 2:00 AM UTC every day
 
