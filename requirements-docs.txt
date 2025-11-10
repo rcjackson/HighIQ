@@ -13,3 +13,8 @@ sphinxcontrib-apidoc
 sphinxcontrib-fulltoc
 sphinxcontrib-versioning
 sphinx-togglebutton
+numpy
+scipy
+pint
+xarray
+netcdf4
