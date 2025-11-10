@@ -50,7 +50,7 @@ jobs:
 
       - name: Build Sphinx HTML
         run: |
-          sphinx-build -b html doc doc/_build/html
+          sphinx-build -b html doc/source doc/_build/html
           # Ensure Pages doesn't treat underscores specially
           touch doc/_build/html/.nojekyll
           # Optional: add a CNAME if you use a custom domain
