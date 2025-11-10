@@ -55,7 +55,7 @@ description = "Package for processing Doppler lidar spectra"
 readme = "README.rst"
 requires-python = ">=3.9"
 dependencies = ["numpy", "scipy", "xarray", "pint", "netcdf4"]
-version = "2025.11"
+version = "2025.11.10"
 
 [tool.setuptools]
 package-dir = {"" = "."}
