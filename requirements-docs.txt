@@ -1,0 +1,15 @@
+sphinx_theme
+sphinx-rtd-theme
+myst-parser
+sphinx-copybutton
+sphinxcontrib-mermaid
+sphinxext-opengraph
+sphinx-design
+sphinx-tabs
+sphinx-autodoc-typehints
+numpydoc
+sphinx-issues
+sphinxcontrib-apidoc
+sphinxcontrib-fulltoc
+sphinxcontrib-versioning
+sphinx-togglebutton
