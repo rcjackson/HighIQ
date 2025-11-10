@@ -41,13 +41,13 @@ target-version = "py310"
 select = ["E", "F"]
 ignore = ["E402", "F401", "E731", "E501"]
 
-[build-system]
-requires = ["setuptools", "wheel", "numpy"]
-build-backend = "setuptools.build_meta"
-
 # Allow autofix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
 unfixable = []
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "highiq"
