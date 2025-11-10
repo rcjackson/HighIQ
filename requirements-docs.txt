@@ -21,3 +21,4 @@ scipy
 pint
 xarray
 netcdf4
+matplotlib
