@@ -13,6 +13,7 @@ sphinxcontrib-apidoc
 sphinxcontrib-fulltoc
 sphinxcontrib-versioning
 sphinx-togglebutton
+sphinx_gallery
 ipython
 nbsphinx
 jupyter-client
@@ -21,3 +22,4 @@ scipy
 pint
 xarray
 netcdf4
+matplotlib
