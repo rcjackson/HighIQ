@@ -1,50 +1,72 @@
-# Sample workflow for building and deploying a Jekyll site to GitHub Pages
-name: Deploy Jekyll with GitHub Pages dependencies preinstalled
+name: Build & Deploy Sphinx Docs
 
 on:
-  # Runs on pushes targeting the default branch
   push:
-    branches: ["master"]
-
-  # Allows you to run this workflow manually from the Actions tab
+    branches: [ main ]
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+# Required for GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+# Prevent concurrent deploys from clobbering each other
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
-  # Build job
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Build with Jekyll
-        uses: actions/jekyll-build-pages@v1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          source: ./
-          destination: ./_site
+          python-version: "3.11"
+
+      # Cache pip to speed up builds (optional)
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # Install your package (for autodoc) and doc deps
+      # If you don't need autodoc, you can skip installing your package.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements-docs.txt ]; then pip install -r requirements-docs.txt; fi
+          # Install your package so autodoc can import it (adjust if you use poetry/hatch)
+          if [ -f pyproject.toml ] || [ -f setup.cfg ] || [ -f setup.py ]; then pip install -e .; fi
+          # Fallbacks if you didn't provide a requirements-docs.txt
+          pip install "sphinx>=7" myst-parser sphinx-rtd-theme
+
+      - name: Build Sphinx HTML
+        run: |
+          sphinx-build -b html docs docs/_build/html
+          # Ensure Pages doesn't treat underscores specially
+          touch docs/_build/html/.nojekyll
+          # Optional: add a CNAME if you use a custom domain
+          # echo "docs.example.org" > docs/_build/html/CNAME
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_build/html
 
-  # Deployment job
   deploy:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
     needs: build
+    runs-on: ubuntu-latest
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
