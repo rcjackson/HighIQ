@@ -19,25 +19,6 @@ import xarray as xr
 from pint import UnitRegistry
 
 
-def _fast_expand(complex_array, factor, num_per_block=200):
-    shp = complex_array.shape
-    expanded_array = np.zeros((shp[0], shp[1], shp[2] * factor))
-    weights = np.tile(np.arange(0, factor) / factor, (shp[0], shp[1], 1))
-    for i in range(shp[2]):
-        gpu_array = xp.zeros(complex_array[:, :, i], dtype=xp.float32)
-        if i < shp[2] - 1:
-            gpu_array2 = xp.zeros(complex_array[:, :, i + 1], dtype=xp.float32)
-            diff_array = gpu_array2 - gpu_array
-        else:
-            diff_array = xp.zeros((shp[0], shp[1]))
-
-        rep_array = xp.transpose(xp.tile(gpu_array, (factor, 1, 1)), [1, 2, 0])
-        diff_array = xp.transpose(xp.tile(diff_array, (factor, 1, 1)), [1, 2, 0])
-        temp_array = diff_array * weights + rep_array
-        expanded_array[:, :, factor * i : factor * (i + 1)] = np.array(temp_array)
-    return expanded_array
-
-
 def get_psd(
     spectra,
     gate_resolution=60.0,

@@ -8,7 +8,11 @@ CUDA-compatible GPU is required.
 
 * Free software: 3-clause BSD license
 
-In order to use HighIQ, you must install the version of CuPy for your
+The CPU-only version of HighIQ can be installed via pip::
+
+    $ pip install highiq
+
+In order to use HighIQ with GPU capababilities, you must install the version of CuPy for your
 specific version of CUDA. In order to do so, follow the link below:
 
 https://docs.cupy.dev/en/stable/install.html
