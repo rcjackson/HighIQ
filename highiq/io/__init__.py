@@ -11,7 +11,7 @@ This module contains the I/O methods for loading data into and saving data from 
     :toctree: generated/
 
     load_arm_netcdf
-
+    read_00_data
 """
 
 from .arm_data import load_arm_netcdf, read_00_data  # noqa: F401
